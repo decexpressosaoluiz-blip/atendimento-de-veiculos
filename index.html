@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>São Luiz Express - Controle Logístico</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+            },
+            colors: {
+              // Paleta Customizada São Luiz Express
+              sle: {
+                // Vermelhos
+                red: '#EC1B23',      // Main Brand Red
+                redLight: '#F4797E', // Lighter Red
+                redDark: '#950C12',  // Darker Red
+                
+                // Azuis
+                blue: '#2E31B4',     // Main Brand Blue
+                blueLight: '#6E71DA',// Highlight Blue
+                blueLighter: '#9798E4', // Soft Blue
+                
+                // Navys (Escuros)
+                navy: '#1A1B62',     // Primary Text / Deep Brand
+                navyDark: '#0F103A', // Dark Mode Background
+                navyLight: '#313392', 
+                
+                // Neutros (Baseados na paleta)
+                bg: '#FCFCFE',       // Main Light Background
+                surface: '#F2F2F8',  // Secondary Light Background
+                border: '#D8D9EB',   // Borders
+              },
+              // Sobrescrevendo Slate para usar os tons frios da paleta
+              slate: {
+                50: '#FCFCFE',
+                100: '#F2F2F8',
+                200: '#E5E5F1',
+                300: '#D8D9EB',
+                400: '#B2B2D6',
+                500: '#9798E4',
+                600: '#6E71DA',
+                700: '#4649CF',
+                800: '#2E31B4',
+                900: '#1A1B62',
+                950: '#0F103A',
+              }
+            },
+            backgroundImage: {
+              'gradient-primary': 'linear-gradient(135deg, #EC1B23 0%, #2E31B4 100%)',
+              'gradient-dark': 'linear-gradient(180deg, #0F103A 0%, #060719 100%)',
+              'gradient-glass': 'linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.5) 100%)',
+              'gradient-glass-dark': 'linear-gradient(180deg, rgba(15,16,58,0.9) 0%, rgba(15,16,58,0.6) 100%)',
+            },
+            boxShadow: {
+              'card': '0 4px 20px -2px rgba(46, 49, 180, 0.08), 0 0 0 1px rgba(46, 49, 180, 0.02)',
+              'elevated': '0 20px 40px -10px rgba(46, 49, 180, 0.15), 0 0 0 1px rgba(255,255,255,0.5)',
+              'glow': '0 0 20px rgba(70, 73, 207, 0.5)',
+              'glow-red': '0 0 20px rgba(236, 27, 35, 0.4)',
+            }
+          }
+        }
+      }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+      }
+      
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #B2B2D6; 
+        border-radius: 10px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #6E71DA; 
+      }
+
+      .dark ::-webkit-scrollbar-thumb {
+        background: #313392;
+      }
+      .dark ::-webkit-scrollbar-thumb:hover {
+        background: #4649CF;
+      }
+
+      /* Mobile Safe Areas */
+      .safe-area-bottom {
+        padding-bottom: env(safe-area-inset-bottom, 20px);
+      }
+      .pb-safe {
+        padding-bottom: calc(env(safe-area-inset-bottom, 20px) + 4rem);
+      }
+
+      /* Glassmorphism Utilities */
+      .glass {
+        background: rgba(252, 252, 254, 0.7);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+      }
+      .dark .glass {
+        background: rgba(15, 16, 58, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0",
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.6",
+    "recharts": "https://aistudiocdn.com/recharts@^3.4.1",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0"
+  }
+}
+</script>
+</head>
+  <body class="bg-sle-bg dark:bg-sle-navyDark text-sle-navy dark:text-slate-100 antialiased transition-colors duration-300 selection:bg-sle-blue selection:text-white">
+    <div id="root"></div>
+  </body>
+</html>
