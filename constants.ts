@@ -35,7 +35,22 @@ export const JUSTIFICATION_REASONS = [
   "Outros"
 ];
 
-export const INITIAL_EMPLOYEES: Employee[] = [];
+export const INITIAL_EMPLOYEES: Employee[] = [
+  {
+    id: 'e-init-1',
+    name: 'Carlos Silva (Motorista)',
+    unitId: 'u1', // Vinculado à Matriz
+    active: true,
+    workSchedule: { days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex'], startTime: '08:00', endTime: '18:00' }
+  },
+  {
+    id: 'e-init-2',
+    name: 'Roberto Souza (Ajudante)',
+    unitId: 'u1', // Vinculado à Matriz
+    active: true,
+    workSchedule: { days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex'], startTime: '08:00', endTime: '18:00' }
+  }
+];
 
 // Generate some vehicles for "Today"
 const today = new Date();

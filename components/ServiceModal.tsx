@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Vehicle, Employee } from '../types';
-import { Camera, X, Trash2, UserCheck, CheckCircle2, ImagePlus, RefreshCw, Smartphone, Loader2, ZoomIn, Sparkles, AlertTriangle, Focus } from 'lucide-react';
+import { Camera, X, Trash2, UserCheck, CheckCircle2, ImagePlus, RefreshCw, Smartphone, Loader2, ZoomIn, Sparkles, AlertTriangle, Focus, UserX } from 'lucide-react';
 import { Button } from './Button';
 import { savePreference, getPreference } from '../services/storage';
 import { analyzeServicePhoto } from '../services/geminiService';
@@ -175,34 +175,59 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
     }
   };
 
-  // Logic for Tap to Focus
+  // Enhanced Logic for Tap to Focus
   const handleTapToFocus = async (e: React.MouseEvent<HTMLDivElement>) => {
     if (!videoRef.current || !streamRef.current) return;
 
-    // 1. Visual Feedback Calculation
+    // 1. Visual Feedback
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
     setFocusPoint({ x, y, visible: true });
-    
-    // Hide reticle after animation
     setTimeout(() => {
         setFocusPoint(prev => prev ? { ...prev, visible: false } : null);
     }, 1000);
 
-    // 2. Attempt Hardware Focus
-    // Note: standard web APIs have limited support for setting specific focus points (pointsOfInterest).
-    // We attempt to trigger a re-focus by applying continuous focus constraints again.
+    // 2. Attempt Hardware Focus Force
     const track = streamRef.current.getVideoTracks()[0];
     const capabilities = (track.getCapabilities ? track.getCapabilities() : {}) as any;
 
     if (capabilities.focusMode) {
         try {
-            // Toggle between modes or re-apply to trigger autofocus routine
-            await track.applyConstraints({ 
-                advanced: [{ focusMode: 'continuous' }] as any 
-            });
+            // Strategy: "Shock" the lens.
+            // Many browsers ignore a simple applyConstraints if the mode is already set.
+            // We try to toggle to a different mode (like manual or single-shot) and back to continuous,
+            // or use pointsOfInterest if available.
+
+            const constraints: any = { advanced: [] };
+            
+            // If pointsOfInterest is supported (rare on web, but worth a try)
+            // Note: Coordinates usually normalized 0..1
+            // This is highly experimental in Web specs
+            /* 
+            if (capabilities.pointsOfInterest) {
+               constraints.advanced.push({ 
+                 pointsOfInterest: [{ x: x / rect.width, y: y / rect.height }] 
+               });
+            } 
+            */
+
+            // Force re-focus by toggling mode
+            if (capabilities.focusMode.includes('single-shot')) {
+                // Single-shot is the best for "Tap to Focus"
+                await track.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] as any });
+            } else if (capabilities.focusMode.includes('manual')) {
+                 // Hack: Switch to manual (locks focus), wait split second, switch back to continuous (triggers search)
+                 await track.applyConstraints({ advanced: [{ focusMode: 'manual' }] as any });
+                 setTimeout(async () => {
+                    await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] as any });
+                 }, 200);
+            } else {
+                 // Just re-apply continuous hoping it triggers
+                 await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] as any });
+            }
+
         } catch (err) {
             console.debug("Focus constraint failed", err);
         }
@@ -247,9 +272,8 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
 
   const removePhoto = (index: number) => {
     setPhotos(prev => prev.filter((_, i) => i !== index));
-    // Also cleanup analysis state - simple rekeying or just delete
+    // Also cleanup analysis state
     const newAnalyses: Record<number, PhotoAnalysis> = {};
-    // This is a naive re-index, in production use unique IDs for photos
     Object.keys(photoAnalyses).forEach(k => {
         const key = parseInt(k);
         if(key < index) newAnalyses[key] = photoAnalyses[key];
@@ -309,30 +333,38 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
           {!isCameraOpen && (
             <section>
               <label className="text-sm font-bold text-sle-navy uppercase tracking-wider mb-3 block">1. Quem está atendendo?</label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {employees.map(emp => (
-                  <button
-                    key={emp.id}
-                    type="button"
-                    onClick={() => setSelectedEmployee(emp.id)}
-                    disabled={isSaving}
-                    className={`relative p-3 rounded-xl border-2 text-left transition-all duration-200 flex flex-col gap-1 disabled:opacity-50 disabled:cursor-not-allowed
-                      ${selectedEmployee === emp.id 
-                        ? 'border-sle-blue bg-blue-50 shadow-md ring-1 ring-sle-blue' 
-                        : 'border-slate-100 bg-slate-50 hover:border-slate-300 hover:bg-slate-100'
-                      }`}
-                  >
-                    <span className={`font-bold text-sm line-clamp-1 ${selectedEmployee === emp.id ? 'text-sle-blue' : 'text-slate-700'}`}>
-                      {emp.name}
-                    </span>
-                    {selectedEmployee === emp.id && (
-                      <div className="absolute top-2 right-2 text-sle-blue">
-                        <UserCheck className="w-4 h-4" />
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
+              {employees.length === 0 ? (
+                <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl p-6 flex flex-col items-center justify-center text-center">
+                   <UserX className="w-8 h-8 text-slate-300 mb-2" />
+                   <p className="text-sm font-bold text-slate-500">Nenhum funcionário cadastrado</p>
+                   <p className="text-xs text-slate-400 mt-1">Contate o administrador para adicionar a equipe desta unidade.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {employees.map(emp => (
+                    <button
+                      key={emp.id}
+                      type="button"
+                      onClick={() => setSelectedEmployee(emp.id)}
+                      disabled={isSaving}
+                      className={`relative p-3 rounded-xl border-2 text-left transition-all duration-200 flex flex-col gap-1 disabled:opacity-50 disabled:cursor-not-allowed
+                        ${selectedEmployee === emp.id 
+                          ? 'border-sle-blue bg-blue-50 shadow-md ring-1 ring-sle-blue' 
+                          : 'border-slate-100 bg-slate-50 hover:border-slate-300 hover:bg-slate-100'
+                        }`}
+                    >
+                      <span className={`font-bold text-sm line-clamp-1 ${selectedEmployee === emp.id ? 'text-sle-blue' : 'text-slate-700'}`}>
+                        {emp.name}
+                      </span>
+                      {selectedEmployee === emp.id && (
+                        <div className="absolute top-2 right-2 text-sle-blue">
+                          <UserCheck className="w-4 h-4" />
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
             </section>
           )}
 
