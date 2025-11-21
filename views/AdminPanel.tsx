@@ -3,7 +3,7 @@ import { AppState, JustificationStatus, Employee, Vehicle, VehicleStatus, UserAc
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
-import { Check, X, Download, Sparkles, Plus, Truck, Users, Clock, Power, Edit, Save, Ban, Trash2, Lock, AlertTriangle, Search, Filter, Activity, Key, ShieldCheck } from 'lucide-react';
+import { Check, X, Download, Sparkles, Plus, Truck, Users, Clock, Power, Edit, Save, Ban, Trash2, Lock, AlertTriangle, Search, Filter, Activity, Key, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
 interface AdminPanelProps {
   state: AppState;
@@ -36,6 +36,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'validations' | 'fleet' | 'team' | 'access'>('dashboard');
   
+  // --- FEEDBACK STATE ---
+  const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+
   // --- DELETE MODAL STATE ---
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'vehicle' | 'employee' | 'user', id: string } | null>(null);
   const [deletePassword, setDeletePassword] = useState('');
@@ -100,6 +103,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const pendingJustifications = state.justifications.filter(j => j.status === JustificationStatus.PENDING);
 
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
   const handleExport = () => {
      const header = ['Data/Hora', 'Veículo', 'Rota', 'Status', 'Chegada Prevista', 'Categoria Justificativa', 'Detalhes'];
      const rows = state.vehicles.map(v => {
@@ -161,10 +169,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
     if (deleteTarget?.type === 'vehicle') {
       onDeleteVehicle(deleteTarget.id);
+      showToast("Veículo removido.");
     } else if (deleteTarget?.type === 'employee') {
       onDeleteEmployee(deleteTarget.id);
+      showToast("Funcionário removido.");
     } else if (deleteTarget?.type === 'user') {
       onDeleteUser(deleteTarget.id);
+      showToast("Usuário removido.");
     }
 
     setDeleteTarget(null);
@@ -190,7 +201,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         });
       }
       setEditingVehicleId(null);
-      alert("Veículo atualizado com sucesso!");
+      showToast("Veículo atualizado com sucesso!");
     } else {
       onAddVehicle({
         number: vehicleForm.number,
@@ -198,7 +209,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         eta,
         unitId: vehicleForm.unitId
       });
-      alert("Veículo cadastrado com sucesso!");
+      showToast("Veículo adicionado à frota!");
     }
     
     setVehicleForm({ number: '', route: '', date: new Date().toISOString().split('T')[0], time: '12:00', unitId: state.units[0].id });
@@ -244,7 +255,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         });
       }
       setEditingEmployeeId(null);
-      alert("Funcionário atualizado com sucesso!");
+      showToast("Cadastro atualizado!");
     } else {
       const newEmp: Employee = {
         id: `e-${Date.now()}`,
@@ -254,7 +265,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         workSchedule: schedule
       };
       onAddEmployee(newEmp);
-      alert("Funcionário cadastrado com sucesso!");
+      showToast("Funcionário cadastrado!");
     }
     
     setEmployeeForm({ name: '', unitId: state.units[0].id, workDays: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex'], startTime: '08:00', endTime: '18:00' });
@@ -291,7 +302,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     e.preventDefault();
     
     if (state.users.some(u => u.username === userForm.username)) {
-        alert("Este nome de usuário já está em uso.");
+        showToast("Este nome de usuário já existe!", 'error');
         return;
     }
 
@@ -304,7 +315,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     };
 
     onAddUser(newUser);
-    alert("Usuário criado com sucesso!");
+    showToast("Usuário de acesso criado!");
     setUserForm({ username: '', password: '', role: 'unit', unitId: state.units[0]?.id || '' });
   };
 
@@ -316,6 +327,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   return (
     <div className="min-h-screen bg-sle-bg dark:bg-slate-950 transition-colors duration-300">
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed top-24 right-4 z-50 animate-in slide-in-from-right-10 fade-in duration-300">
+          <div className={`flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl border ${toast.type === 'success' ? 'bg-green-600 border-green-500' : 'bg-red-600 border-red-500'} text-white`}>
+            <div className="bg-white/20 p-1 rounded-full">
+              {toast.type === 'success' ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
+            </div>
+            <span className="font-bold text-sm">{toast.message}</span>
+          </div>
+        </div>
+      )}
+
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         
         {/* DELETE CONFIRMATION MODAL */}
@@ -731,6 +754,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                     onClick={() => {
                                       if(confirm("Tem certeza que deseja cancelar este agendamento? Os dados serão mantidos como cancelados.")) {
                                         onCancelVehicle(v.id);
+                                        showToast("Veículo cancelado.", 'error');
                                       }
                                     }}
                                     disabled={!isEditable}

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Vehicle, Employee } from '../types';
-import { Camera, X, Trash2, UserCheck, CheckCircle2, ImagePlus, RefreshCw, Smartphone, Loader2, ZoomIn, Sparkles, AlertTriangle } from 'lucide-react';
+import { Camera, X, Trash2, UserCheck, CheckCircle2, ImagePlus, RefreshCw, Smartphone, Loader2, ZoomIn, Sparkles, AlertTriangle, Focus } from 'lucide-react';
 import { Button } from './Button';
 import { savePreference, getPreference } from '../services/storage';
 import { analyzeServicePhoto } from '../services/geminiService';
@@ -35,9 +35,10 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
     return getPreference('cameraFacingMode', 'environment');
   });
   
-  // Zoom State
+  // Zoom & Focus State
   const [zoom, setZoom] = useState(1);
   const [zoomCapabilities, setZoomCapabilities] = useState<{min: number, max: number, step: number} | null>(null);
+  const [focusPoint, setFocusPoint] = useState<{x: number, y: number, visible: boolean} | null>(null);
   
   // State for success feedback
   const [isSuccess, setIsSuccess] = useState(false);
@@ -114,7 +115,9 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
         video: { 
           facingMode: mode,
           width: { ideal: 1920 }, 
-          height: { ideal: 1080 }
+          height: { ideal: 1080 },
+          // Try to request continuous focus initially
+          advanced: [{ focusMode: 'continuous' }] as any
         } 
       });
       streamRef.current = stream;
@@ -169,6 +172,40 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
     if (streamRef.current) {
       const track = streamRef.current.getVideoTracks()[0];
       track.applyConstraints({ advanced: [{ zoom: newZoom } as any] }).catch(err => console.debug("Zoom apply failed", err));
+    }
+  };
+
+  // Logic for Tap to Focus
+  const handleTapToFocus = async (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!videoRef.current || !streamRef.current) return;
+
+    // 1. Visual Feedback Calculation
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    setFocusPoint({ x, y, visible: true });
+    
+    // Hide reticle after animation
+    setTimeout(() => {
+        setFocusPoint(prev => prev ? { ...prev, visible: false } : null);
+    }, 1000);
+
+    // 2. Attempt Hardware Focus
+    // Note: standard web APIs have limited support for setting specific focus points (pointsOfInterest).
+    // We attempt to trigger a re-focus by applying continuous focus constraints again.
+    const track = streamRef.current.getVideoTracks()[0];
+    const capabilities = (track.getCapabilities ? track.getCapabilities() : {}) as any;
+
+    if (capabilities.focusMode) {
+        try {
+            // Toggle between modes or re-apply to trigger autofocus routine
+            await track.applyConstraints({ 
+                advanced: [{ focusMode: 'continuous' }] as any 
+            });
+        } catch (err) {
+            console.debug("Focus constraint failed", err);
+        }
     }
   };
 
@@ -304,7 +341,10 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
              {!isCameraOpen && <label className="text-sm font-bold text-sle-navy uppercase tracking-wider mb-3 block">2. Registro Fotográfico Inteligente</label>}
              
              {isCameraOpen ? (
-               <div className="relative bg-black rounded-xl overflow-hidden aspect-[3/4] sm:aspect-video flex items-center justify-center shadow-inner">
+               <div 
+                 className="relative bg-black rounded-xl overflow-hidden aspect-[3/4] sm:aspect-video flex items-center justify-center shadow-inner cursor-crosshair"
+                 onClick={handleTapToFocus}
+               >
                  <video 
                    ref={videoRef} 
                    autoPlay 
@@ -312,6 +352,20 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
                    muted 
                    className={`w-full h-full object-cover ${tempPhoto ? 'hidden' : 'block'}`} 
                  />
+                 
+                 {/* Focus Reticle Animation */}
+                 {focusPoint && focusPoint.visible && !tempPhoto && (
+                    <div 
+                        className="absolute border-2 border-yellow-400 w-16 h-16 rounded-lg pointer-events-none animate-in zoom-in-50 fade-out duration-700 shadow-[0_0_10px_rgba(250,204,21,0.5)]"
+                        style={{ 
+                            left: focusPoint.x, 
+                            top: focusPoint.y, 
+                            transform: 'translate(-50%, -50%)' 
+                        }}
+                    >
+                        <div className="absolute top-1/2 left-1/2 w-1 h-1 bg-yellow-400 rounded-full transform -translate-x-1/2 -translate-y-1/2" />
+                    </div>
+                 )}
                  
                  {tempPhoto && (
                    <img 
@@ -323,7 +377,7 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
                  
                  {zoomCapabilities && !tempPhoto && (
                    <div className="absolute bottom-28 inset-x-0 flex justify-center items-center z-20 pointer-events-none">
-                     <div className="bg-black/50 backdrop-blur-sm px-4 py-2 rounded-full flex items-center gap-3 pointer-events-auto border border-white/10 shadow-lg w-64 animate-in fade-in slide-in-from-bottom-4">
+                     <div onClick={(e) => e.stopPropagation()} className="bg-black/50 backdrop-blur-sm px-4 py-2 rounded-full flex items-center gap-3 pointer-events-auto border border-white/10 shadow-lg w-64 animate-in fade-in slide-in-from-bottom-4">
                         <ZoomIn className="w-4 h-4 text-white/70" />
                         <input 
                           type="range"
@@ -339,7 +393,8 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
                    </div>
                  )}
 
-                 <div className="absolute bottom-6 inset-x-0 flex items-center justify-center gap-4 z-10 px-4">
+                 {/* Camera Controls */}
+                 <div onClick={(e) => e.stopPropagation()} className="absolute bottom-6 inset-x-0 flex items-center justify-center gap-4 z-10 px-4">
                    {!tempPhoto ? (
                      <>
                        <button type="button" onClick={stopCamera} className="bg-white/20 hover:bg-white/30 backdrop-blur-md p-3 rounded-full text-white transition-all"><X className="w-6 h-6" /></button>
@@ -357,6 +412,15 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
                      </>
                    )}
                  </div>
+                 
+                 {/* Hint for tap to focus */}
+                 {!tempPhoto && (
+                    <div className="absolute top-4 inset-x-0 text-center pointer-events-none opacity-60">
+                        <span className="text-[10px] bg-black/30 backdrop-blur-md text-white px-3 py-1 rounded-full">
+                            Toque na tela para focar
+                        </span>
+                    </div>
+                 )}
                </div>
              ) : (
                <div className="space-y-4">
