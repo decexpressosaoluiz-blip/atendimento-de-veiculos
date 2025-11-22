@@ -52,8 +52,6 @@ const App: React.FC = () => {
       if (!state.googleSheetsUrl) return;
       
       try {
-           // Using 'no-cors' matches standard GAS Web App requirements for client-side calls
-           // content-type text/plain avoids CORS preflight OPTIONS request which GAS doesn't handle well
            await fetch(state.googleSheetsUrl, {
              method: 'POST',
              mode: 'no-cors', 
@@ -91,7 +89,6 @@ const App: React.FC = () => {
              body: JSON.stringify(payload)
            });
            
-           // In no-cors mode, we can't read the response. If fetch didn't throw, it was "sent".
            alert("Solicitação enviada! Verifique se uma nova linha apareceu na sua planilha agora.\n\nSe não apareceu:\n1. Vá no Apps Script\n2. Clique em Implantar > Gerenciar Implantações\n3. Crie uma NOVA versão.");
       } catch (e) {
            alert("Erro de rede ao tentar enviar: " + e);
@@ -235,7 +232,7 @@ const App: React.FC = () => {
   };
 
   const handleCancelVehicle = (id: string) => {
-    // Soft delete logic: Update status to CANCELLED instead of removing from array
+    // Soft delete logic: Update status to CANCELLED
     setState(prev => ({ 
         ...prev, 
         vehicles: prev.vehicles.map(v => v.id === id ? { ...v, status: VehicleStatus.CANCELLED } : v)

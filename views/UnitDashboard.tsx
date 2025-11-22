@@ -4,7 +4,7 @@ import { AppState, Vehicle, VehicleStatus, Unit } from '../types';
 import { ServiceModal } from '../components/ServiceModal';
 import { JustificationModal } from '../components/JustificationModal';
 import { VehicleCard } from '../components/VehicleCard'; // Using the updated component
-import { AlertOctagon, AlertTriangle, CheckCircle2, Zap, Plus, Save, BellOff, BellRing } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, CheckCircle2, Zap, Plus, Save, BellOff, BellRing, Filter } from 'lucide-react';
 import { Button } from '../components/Button';
 
 interface UnitDashboardProps {
@@ -59,19 +59,22 @@ const NewTripModal: React.FC<{ units: Unit[]; onClose: () => void; onSave: (data
     stops.push({
         unitId: form.originId,
         type: 'ORIGIN',
-        eta: new Date(`${form.originDate}T${form.originTime}:00`).toISOString()
+        eta: new Date(`${form.originDate}T${form.originTime}:00`).toISOString(),
+        status: VehicleStatus.PENDING
     });
     if (form.hasIntermediate) {
         stops.push({
             unitId: form.intId,
             type: 'INTERMEDIATE',
-            eta: new Date(`${form.intDate}T${form.intTime}:00`).toISOString()
+            eta: new Date(`${form.intDate}T${form.intTime}:00`).toISOString(),
+            status: VehicleStatus.PENDING
         });
     }
     stops.push({
         unitId: form.destId,
         type: 'DESTINATION',
-        eta: new Date(`${form.destDate}T${form.destTime}:00`).toISOString()
+        eta: new Date(`${form.destDate}T${form.destTime}:00`).toISOString(),
+        status: VehicleStatus.PENDING
     });
     onSave({ number: form.number, route: form.route, stops });
   };
@@ -82,7 +85,7 @@ const NewTripModal: React.FC<{ units: Unit[]; onClose: () => void; onSave: (data
      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
         <div className="bg-white dark:bg-slate-950 w-full max-w-lg rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
            <div className="p-4 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white dark:bg-slate-950 z-10">
-              <h3 className="font-bold text-lg">Nova Viagem</h3>
+              <h3 className="font-bold text-lg">Nova Viagem (Rápida)</h3>
               <button onClick={onClose}><Plus className="rotate-45" /></button>
            </div>
            <form onSubmit={handleSubmit} className="p-6 space-y-4">
@@ -105,29 +108,55 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedVehicleForService, setSelectedVehicleForService] = useState<Vehicle | null>(null);
   const [selectedVehicleForJustify, setSelectedVehicleForJustify] = useState<Vehicle | null>(null);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'late' | 'done'>('pending');
+  
+  // Filter State
+  const [filter, setFilter] = useState<'all' | 'pending' | 'late' | 'done'>('all');
   const [showNewTripModal, setShowNewTripModal] = useState(false);
   
   // Local state for silenced alarms (session based)
   const [silencedAlarms, setSilencedAlarms] = useState<string[]>([]);
   
   const currentUnitId = state.currentUser?.unitId || '';
+  const unitConfig = state.units.find(u => u.id === currentUnitId);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  const relevantVehicles = state.vehicles.filter(v => 
-      v.status !== VehicleStatus.CANCELLED && 
-      v.stops.some(s => s.unitId === currentUnitId)
-  );
-
-  const unitConfig = state.units.find(u => u.id === currentUnitId);
   const getStop = (v: Vehicle) => v.stops.find(s => s.unitId === currentUnitId);
 
-  // Filter Logic
-  const filteredVehicles = relevantVehicles.filter(v => {
+  // --- CORE FILTERING LOGIC ---
+  // Rules:
+  // 1. Show ALL vehicles scheduled for TODAY (Completed or Pending)
+  // 2. Show vehicles from PAST only if PENDING (Backlog)
+  // 3. Hide vehicles from FUTURE
+  // 4. Hide vehicles from PAST if COMPLETED
+  const visibleVehicles = state.vehicles.filter(v => {
+      if (v.status === VehicleStatus.CANCELLED) return false;
+      
+      const stop = getStop(v);
+      if (!stop) return false;
+
+      const stopDate = new Date(stop.eta);
+      const now = new Date();
+      
+      // Reset times to compare just dates
+      const stopDay = new Date(stopDate.getFullYear(), stopDate.getMonth(), stopDate.getDate()).getTime();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+      const isToday = stopDay === today;
+      const isPast = stopDay < today;
+      // const isFuture = stopDay > today;
+
+      if (isToday) return true; // Rule 1: Show everything from today
+      if (isPast && stop.status === VehicleStatus.PENDING) return true; // Rule 2: Show backlog
+
+      return false; // Hide everything else
+  });
+
+  // --- SECONDARY FILTERING (BUTTONS) ---
+  const filteredVehicles = visibleVehicles.filter(v => {
     const stop = getStop(v);
     if (!stop) return false;
     
@@ -138,18 +167,19 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
     if (filter === 'pending') return isPending;
     if (filter === 'late') return isLate;
     if (filter === 'done') return isDone;
-    // 'all' includes Pending, Late and Done
+    // 'all' return true
     return true; 
   }).sort((a, b) => {
      const stopA = getStop(a);
      const stopB = getStop(b);
      if (!stopA || !stopB) return 0;
+     // Sort by time
      return new Date(stopA.eta).getTime() - new Date(stopB.eta).getTime();
   });
 
   // --- ALARM LOGIC ---
   const CRITICAL_DELAY_MINUTES = 30;
-  const criticalVehicles = relevantVehicles.filter(v => {
+  const criticalVehicles = visibleVehicles.filter(v => {
       const stop = getStop(v);
       if (!stop || stop.status !== VehicleStatus.PENDING) return false;
       
@@ -164,17 +194,17 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
           setSilencedAlarms(prev => prev.filter(x => x !== id));
       } else {
           setSilencedAlarms(prev => [...prev, id]);
-          onSilenceAlarm(id); // Optionally log to backend/state
+          onSilenceAlarm(id);
       }
   };
 
-  // Stats for Cards
-  const pendingCount = relevantVehicles.filter(v => getStop(v)?.status === VehicleStatus.PENDING).length;
-  const lateCount = relevantVehicles.filter(v => {
+  // Stats for Cards (Based on Visible Vehicles)
+  const pendingCount = visibleVehicles.filter(v => getStop(v)?.status === VehicleStatus.PENDING).length;
+  const lateCount = visibleVehicles.filter(v => {
       const s = getStop(v);
       return s?.status === VehicleStatus.PENDING && currentTime > new Date(s.eta);
   }).length;
-  const doneCount = relevantVehicles.filter(v => {
+  const doneCount = visibleVehicles.filter(v => {
       const s = getStop(v);
       return s?.status === VehicleStatus.COMPLETED || s?.status === VehicleStatus.LATE_JUSTIFIED;
   }).length;
@@ -226,7 +256,7 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
 
         <div className="flex gap-3 overflow-x-auto pb-2 hide-scrollbar container mx-auto max-w-2xl">
           <div onClick={() => setFilter('all')}>
-             <StatCard label="Total Lista" value={relevantVehicles.length} color="purple" icon={<AlertOctagon className="w-5 h-5" />} isActive={filter === 'all'} />
+             <StatCard label="Agenda Dia" value={visibleVehicles.length} color="purple" icon={<AlertOctagon className="w-5 h-5" />} isActive={filter === 'all'} />
           </div>
           <div onClick={() => setFilter('pending')}>
              <StatCard label="Pendentes" value={pendingCount} color="blue" icon={<Zap className="w-5 h-5" />} isActive={filter === 'pending'} />
@@ -235,16 +265,17 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
              <StatCard label="Atrasados" value={lateCount} color="red" icon={<AlertTriangle className="w-5 h-5" />} isActive={filter === 'late'} />
           </div>
           <div onClick={() => setFilter('done')}>
-             <StatCard label="Finalizados" value={doneCount} color="green" icon={<CheckCircle2 className="w-5 h-5" />} isActive={filter === 'done'} />
+             <StatCard label="Atendidos" value={doneCount} color="green" icon={<CheckCircle2 className="w-5 h-5" />} isActive={filter === 'done'} />
           </div>
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-6 max-w-2xl">
+      <div className="container mx-auto px-4 py-6 max-w-2xl relative">
         
         {/* ACTION BAR */}
         <div className="flex justify-between items-center mb-4">
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 flex-1">
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 flex-1 hide-scrollbar">
+                <Filter className="w-4 h-4 text-slate-400 mr-1 flex-shrink-0" />
                 {(['all', 'pending', 'late', 'done'] as const).map(f => (
                     <button 
                         key={f}
@@ -258,17 +289,20 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
                     </button>
                 ))}
             </div>
-            
-            {onAddVehicle && (
-                <button 
-                    onClick={() => setShowNewTripModal(true)}
-                    className="bg-sle-blue hover:bg-sle-navy text-white p-3 rounded-full shadow-lg shadow-sle-blue/30 hover:scale-110 transition-all flex-shrink-0 ml-2"
-                    title="Registrar Viagem Extra"
-                >
-                    <Plus className="w-5 h-5" />
-                </button>
-            )}
         </div>
+
+        {/* Floating Action Button for Add Trip */}
+        {onAddVehicle && (
+           <div className="fixed bottom-6 right-6 z-50">
+              <button 
+                  onClick={() => setShowNewTripModal(true)}
+                  className="bg-sle-blue hover:bg-sle-navy text-white p-4 rounded-full shadow-2xl shadow-sle-blue/40 hover:scale-110 transition-all flex items-center gap-2"
+                  title="Registrar Viagem Extra"
+              >
+                  <Plus className="w-6 h-6" />
+              </button>
+           </div>
+        )}
 
         {/* LIST */}
         <div className="space-y-4 min-h-[50vh]">
@@ -278,6 +312,7 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
                 <CheckCircle2 className="w-12 h-12" />
               </div>
               <p className="font-bold text-lg">Nenhum veículo neste filtro.</p>
+              <p className="text-sm text-slate-400">Visualizando apenas hoje + pendências antigas.</p>
             </div>
           ) : (
             filteredVehicles.map((vehicle, index) => (

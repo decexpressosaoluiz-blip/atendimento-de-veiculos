@@ -3,8 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { AppState, JustificationStatus, Employee, Vehicle, VehicleStatus, UserAccount } from '../types';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
-import { Check, X, Download, Sparkles, Plus, Truck, Users, Clock, Power, Edit, Save, Ban, Trash2, Lock, AlertTriangle, Search, Activity, Key, ShieldCheck, Link, Map, CornerDownRight, ArrowRight, MapPin, Upload, Copy, HelpCircle, FileJson, Zap } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
+import { Check, X, Download, Plus, Truck, Users, Key, Edit, Save, Trash2, Link, Map, ArrowRight, MapPin, Upload, Copy, HelpCircle, FileJson, Zap, Lightbulb, TrendingUp, AlertOctagon, AlertTriangle } from 'lucide-react';
 
 interface AdminPanelProps {
   state: AppState;
@@ -21,7 +21,7 @@ interface AdminPanelProps {
   onDeleteUser: (userId: string) => void;
   onUpdateSettings: (settings: { googleSheetsUrl: string }) => void;
   onImportData: (data: AppState) => void;
-  onTestSettings: (url: string) => void; // New prop
+  onTestSettings: (url: string) => void;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ 
@@ -41,7 +41,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onImportData,
   onTestSettings
 }) => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'validations' | 'fleet' | 'team' | 'access' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'fleet' | 'team' | 'access' | 'settings'>('dashboard');
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
 
   // --- DELETE MODAL STATE ---
@@ -49,7 +49,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteError, setDeleteError] = useState('');
 
-  // --- TRIP FORM STATE (UPDATED FOR MULTI-STOP) ---
+  // --- TRIP FORM STATE ---
   const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null);
   const [tripForm, setTripForm] = useState({
     number: '',
@@ -64,7 +64,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     intDate: new Date().toISOString().split('T')[0],
     intTime: '12:00',
 
-    hasDestination: true, // Destination is now optional, defaults to true
+    hasDestination: true, // Optional now
     destId: state.units.length > 1 ? state.units[state.units.length - 1].id : '',
     destDate: new Date().toISOString().split('T')[0],
     destTime: '18:00'
@@ -93,7 +93,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     googleSheetsUrl: state.googleSheetsUrl || ''
   });
 
-  // SYNC SETTINGS STATE WHEN PROP CHANGES
   useEffect(() => {
     setSettingsForm(prev => ({
       ...prev,
@@ -101,14 +100,67 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }));
   }, [state.googleSheetsUrl]);
 
-  // Analytics Calculation (Simplified for multi-stop: check if ANY stop is late)
-  const totalVehicles = state.vehicles.length;
-  const pendingJustifications = state.justifications.filter(j => j.status === JustificationStatus.PENDING);
-
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
+
+  // --- ANALYTICS CALCULATION ---
+  const calculateAnalytics = () => {
+     const activeVehicles = state.vehicles.filter(v => v.status !== VehicleStatus.CANCELLED);
+     const totalTrips = activeVehicles.length;
+     
+     let totalStops = 0;
+     let completedStops = 0;
+     let lateStops = 0;
+     
+     const employeeStats: Record<string, number> = {};
+     const unitDelays: Record<string, number> = {};
+     
+     activeVehicles.forEach(v => {
+         v.stops.forEach(s => {
+             totalStops++;
+             if (s.status === VehicleStatus.COMPLETED) {
+                 completedStops++;
+                 if (s.servicedByEmployeeId) {
+                     const name = state.employees.find(e => e.id === s.servicedByEmployeeId)?.name || 'Unknown';
+                     employeeStats[name] = (employeeStats[name] || 0) + 1;
+                 }
+             }
+             
+             // Check latency (Past pending or Late justified)
+             const isLate = (s.status === VehicleStatus.PENDING && new Date() > new Date(s.eta)) || 
+                            s.status === VehicleStatus.LATE_JUSTIFIED;
+             if (isLate) {
+                 lateStops++;
+                 const unitName = state.units.find(u => u.id === s.unitId)?.name || 'Unknown';
+                 unitDelays[unitName] = (unitDelays[unitName] || 0) + 1;
+             }
+         });
+     });
+
+     const efficiency = totalStops > 0 ? Math.round((completedStops / totalStops) * 100) : 0;
+     const topEmployees = Object.entries(employeeStats)
+        .map(([name, count]) => ({ name, count }))
+        .sort((a,b) => b.count - a.count)
+        .slice(0, 5);
+
+     const chartDataStatus = [
+        { name: 'No Prazo', value: completedStops, color: '#10B981' }, // emerald-500
+        { name: 'Atrasos', value: lateStops, color: '#EF4444' },       // red-500
+        { name: 'Pendentes', value: totalStops - completedStops - lateStops, color: '#3B82F6' } // blue-500
+     ];
+
+     // Suggestions
+     const suggestions = [];
+     if (lateStops > completedStops * 0.2) suggestions.push("Alto índice de atrasos. Considere rever os tempos estimados das rotas.");
+     if (efficiency < 50 && totalTrips > 0) suggestions.push("Eficiência abaixo de 50%. Verifique se os motoristas estão registrando as paradas corretamente.");
+     if (topEmployees.length > 0 && topEmployees[0].count > topEmployees[1]?.count * 2) suggestions.push(`${topEmployees[0].name} está sobrecarregado comparado aos outros.`);
+
+     return { totalTrips, efficiency, topEmployees, chartDataStatus, unitDelays, suggestions };
+  };
+
+  const analytics = calculateAnalytics();
 
   // --- DELETE LOGIC ---
   const initiateDeleteVehicle = (v: Vehicle) => {
@@ -136,70 +188,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const handleSettingsSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanUrl = settingsForm.googleSheetsUrl.trim();
-    onUpdateSettings({ googleSheetsUrl: cleanUrl });
+    onUpdateSettings({ googleSheetsUrl: settingsForm.googleSheetsUrl.trim() });
     showToast("Configurações salvas!");
   };
-
-  const handleTestConnection = () => {
-      const cleanUrl = settingsForm.googleSheetsUrl.trim();
-      if (!cleanUrl) {
-          showToast("Insira uma URL para testar", "error");
-          return;
-      }
-      onTestSettings(cleanUrl);
-  };
-
-  // --- BACKUP LOGIC ---
-  const handleExportData = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
-    const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", "sao_luiz_backup_" + new Date().toISOString().split('T')[0] + ".json");
-    document.body.appendChild(downloadAnchorNode);
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
-    showToast("Backup baixado com sucesso!");
-  };
-
-  const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fileReader = new FileReader();
-    if (e.target.files && e.target.files[0]) {
-        fileReader.readAsText(e.target.files[0], "UTF-8");
-        fileReader.onload = (event) => {
-            try {
-                if (event.target?.result) {
-                    const parsedData = JSON.parse(event.target.result as string);
-                    // Basic validation
-                    if (parsedData.vehicles && parsedData.users) {
-                        onImportData(parsedData);
-                        showToast("Dados restaurados com sucesso!");
-                    } else {
-                        showToast("Arquivo de backup inválido.", "error");
-                    }
-                }
-            } catch (err) {
-                showToast("Erro ao ler arquivo.", "error");
-            }
-        };
-    }
-  };
-
 
   // --- TRIP FORM SUBMIT ---
   const handleTripSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
     const stops = [];
-    // Build Origin
+    // Origin
     stops.push({
         unitId: tripForm.originId,
         type: 'ORIGIN',
         eta: new Date(`${tripForm.originDate}T${tripForm.originTime}:00`).toISOString(),
         status: VehicleStatus.PENDING
     });
-
-    // Build Intermediate
+    // Intermediate
     if (tripForm.hasIntermediate) {
         stops.push({
             unitId: tripForm.intId,
@@ -208,8 +212,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             status: VehicleStatus.PENDING
         });
     }
-
-    // Build Dest
+    // Dest
     if (tripForm.hasDestination) {
         stops.push({
             unitId: tripForm.destId,
@@ -219,11 +222,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         });
     }
 
+    if (stops.length < 2 && !tripForm.hasDestination) {
+        // If only origin is set, technically valid as a "Start only" task?
+        // Let's allow it but maybe warn
+    }
+
     if (editingVehicleId) {
         const original = state.vehicles.find(v => v.id === editingVehicleId);
-        if (original) {
-            onEditVehicle({ ...original, number: tripForm.number, route: tripForm.route, stops: stops as any });
-        }
+        if (original) onEditVehicle({ ...original, number: tripForm.number, route: tripForm.route, stops: stops as any });
         setEditingVehicleId(null);
         showToast("Viagem atualizada!");
     } else {
@@ -231,7 +237,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         showToast("Nova viagem criada!");
     }
     
-    // Reset Form
     setTripForm({ ...tripForm, number: '', route: '', hasIntermediate: false, hasDestination: true });
   };
 
@@ -264,7 +269,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
      window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // --- EMPLOYEE/USER SUBMITS ---
   const handleEmployeeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const schedule = { days: employeeForm.workDays, startTime: employeeForm.startTime, endTime: employeeForm.endTime };
@@ -288,29 +292,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       showToast("Usuário criado.");
   };
 
-  // --- APPS SCRIPT TEMPLATE (ROBUST VERSION) ---
   const appsScriptCode = `
 function doPost(e) {
   var lock = LockService.getScriptLock();
-  lock.tryLock(10000); // Wait up to 10s for other requests
+  lock.tryLock(10000); // Wait up to 10s
 
   try {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-    
-    // Create Header if needed
     if (sheet.getLastRow() === 0) {
-      sheet.appendRow(["Data/Hora", "Veículo", "Rota", "Unidade", "Tipo Parada", "Funcionário", "Status", "Qtd Fotos", "Raw Data"]);
+      sheet.appendRow(["Data/Hora", "Veículo", "Rota", "Unidade", "Tipo Parada", "Funcionário", "Status", "Qtd Fotos", "Dados Brutos"]);
     }
     
-    var data;
-    try {
-      data = JSON.parse(e.postData.contents);
-    } catch(err) {
-      // Fallback for debugging
-      sheet.appendRow([new Date(), "ERROR", "-", "-", "-", "-", "JSON PARSE ERROR", 0, e.postData.contents]);
-      return ContentService.createTextOutput(JSON.stringify({"result":"error"})).setMimeType(ContentService.MimeType.JSON);
-    }
-  
+    var data = JSON.parse(e.postData.contents);
     sheet.appendRow([
       data.timestamp,
       data.vehicle,
@@ -323,17 +316,13 @@ function doPost(e) {
       JSON.stringify(data)
     ]);
   
-    return ContentService.createTextOutput(JSON.stringify({"result":"success"}))
-      .setMimeType(ContentService.MimeType.JSON);
-      
+    return ContentService.createTextOutput(JSON.stringify({"result":"success"})).setMimeType(ContentService.MimeType.JSON);
   } catch(e) {
-    return ContentService.createTextOutput(JSON.stringify({"result":"error", "error": e.toString()}))
-      .setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({"result":"error", "error": e.toString()})).setMimeType(ContentService.MimeType.JSON);
   } finally {
     lock.releaseLock();
   }
-}
-  `.trim();
+}`.trim();
 
   const inputClassName = "w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sle-navy dark:text-white p-3.5 focus:ring-2 focus:ring-sle-blue/20 focus:border-sle-blue outline-none transition-all duration-200 shadow-sm text-sm";
   const labelClassName = "block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 ml-1";
@@ -354,8 +343,7 @@ function doPost(e) {
             </div>
             <div className="flex p-1.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-x-auto">
                 {[
-                    {id: 'dashboard', icon: Activity, label: 'Dashboard'},
-                    {id: 'validations', icon: Check, label: 'Validações'},
+                    {id: 'dashboard', icon: TrendingUp, label: 'Analytics'},
                     {id: 'fleet', icon: Map, label: 'Viagens'},
                     {id: 'team', icon: Users, label: 'Equipe'},
                     {id: 'access', icon: Key, label: 'Acessos'},
@@ -385,9 +373,89 @@ function doPost(e) {
 
          {/* DASHBOARD TAB */}
          {activeTab === 'dashboard' && (
-             <div className="grid grid-cols-1 md:grid-cols-4 gap-5 animate-in fade-in">
-                 <Card className="border-l-4 border-l-sle-blue dark:bg-slate-900"><div className="text-4xl font-bold">{totalVehicles}</div><div className="text-xs uppercase text-slate-400">Viagens Ativas</div></Card>
-                 <Card className="border-l-4 border-l-red-500 dark:bg-slate-900"><div className="text-4xl font-bold">{pendingJustifications.length}</div><div className="text-xs uppercase text-slate-400">Validações Pendentes</div></Card>
+             <div className="space-y-6 animate-in fade-in">
+                 {/* KPIs */}
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                     <Card className="border-l-4 border-l-sle-blue dark:bg-slate-900">
+                         <div className="flex justify-between items-start">
+                             <div>
+                                <div className="text-4xl font-bold">{analytics.totalTrips}</div>
+                                <div className="text-xs uppercase text-slate-400">Viagens Ativas</div>
+                             </div>
+                             <Truck className="w-8 h-8 text-slate-200" />
+                         </div>
+                     </Card>
+                     <Card className="border-l-4 border-l-green-500 dark:bg-slate-900">
+                         <div className="flex justify-between items-start">
+                             <div>
+                                <div className="text-4xl font-bold">{analytics.efficiency}%</div>
+                                <div className="text-xs uppercase text-slate-400">Eficiência Global</div>
+                             </div>
+                             <TrendingUp className="w-8 h-8 text-green-100" />
+                         </div>
+                     </Card>
+                     <Card className="border-l-4 border-l-red-500 dark:bg-slate-900">
+                         <div className="flex justify-between items-start">
+                             <div>
+                                <div className="text-4xl font-bold text-red-500">{analytics.chartDataStatus.find(x=>x.name === 'Atrasos')?.value || 0}</div>
+                                <div className="text-xs uppercase text-slate-400">Atrasos Registrados</div>
+                             </div>
+                             <AlertTriangle className="w-8 h-8 text-red-100" />
+                         </div>
+                     </Card>
+                 </div>
+
+                 {/* Charts Row */}
+                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <Card className="dark:bg-slate-900 min-h-[300px]">
+                        <h3 className="font-bold text-lg mb-4 text-sle-navy dark:text-white">Status da Frota</h3>
+                        <ResponsiveContainer width="100%" height={250}>
+                            <PieChart>
+                                <Pie data={analytics.chartDataStatus} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                                    {analytics.chartDataStatus.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                    ))}
+                                </Pie>
+                                <Tooltip />
+                                <Legend />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </Card>
+
+                    <Card className="dark:bg-slate-900 min-h-[300px]">
+                        <h3 className="font-bold text-lg mb-4 text-sle-navy dark:text-white">Top Funcionários (Atendimentos)</h3>
+                        <ResponsiveContainer width="100%" height={250}>
+                            <BarChart data={analytics.topEmployees} layout="vertical">
+                                <XAxis type="number" hide />
+                                <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 12}} />
+                                <Tooltip cursor={{fill: 'transparent'}} />
+                                <Bar dataKey="count" fill="#2E31B4" radius={[0, 4, 4, 0]} barSize={20} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </Card>
+                 </div>
+
+                 {/* Suggestions & Insights */}
+                 <div className="grid grid-cols-1 gap-6">
+                     <Card className="bg-gradient-to-r from-blue-50 to-white dark:from-slate-900 dark:to-slate-800 border-blue-100">
+                         <h3 className="font-bold text-lg mb-4 text-sle-navy dark:text-white flex items-center gap-2">
+                             <Lightbulb className="w-5 h-5 text-yellow-500" />
+                             Insights & Sugestões Inteligentes
+                         </h3>
+                         {analytics.suggestions.length > 0 ? (
+                             <ul className="space-y-2">
+                                 {analytics.suggestions.map((s, i) => (
+                                     <li key={i} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
+                                         <div className="min-w-[6px] h-[6px] rounded-full bg-sle-blue mt-1.5"></div>
+                                         {s}
+                                     </li>
+                                 ))}
+                             </ul>
+                         ) : (
+                             <p className="text-sm text-slate-500">Nenhum problema crítico detectado. A operação está fluindo bem!</p>
+                         )}
+                     </Card>
+                 </div>
              </div>
          )}
 
@@ -454,7 +522,7 @@ function doPost(e) {
                                  <div>
                                      <label className="flex items-center gap-2 cursor-pointer">
                                          <input type="checkbox" checked={tripForm.hasDestination} onChange={e => setTripForm({...tripForm, hasDestination: e.target.checked})} />
-                                         <span className="text-sm font-bold text-slate-600 dark:text-slate-300">Definir Destino</span>
+                                         <span className="text-sm font-bold text-slate-600 dark:text-slate-300">Definir Destino (Opcional)</span>
                                      </label>
                                  </div>
 
@@ -484,7 +552,7 @@ function doPost(e) {
                  <div className="lg:col-span-8">
                      <h3 className="text-xl font-bold mb-4 text-sle-navy dark:text-white">Viagens Programadas</h3>
                      <div className="space-y-3">
-                         {state.vehicles.slice().reverse().map(v => {
+                         {state.vehicles.filter(v => v.status !== VehicleStatus.CANCELLED).slice().reverse().map(v => {
                              const origin = v.stops.find(s => s.type === 'ORIGIN');
                              const dest = v.stops.find(s => s.type === 'DESTINATION');
                              const stopsCount = v.stops.length;
@@ -520,7 +588,7 @@ function doPost(e) {
                                      
                                      <div className="flex items-center gap-2 self-end md:self-center">
                                          <button onClick={() => startEditingTrip(v)} className="p-2 bg-slate-50 dark:bg-slate-800 rounded-lg hover:text-sle-blue"><Edit className="w-4 h-4" /></button>
-                                         <button onClick={() => initiateDeleteVehicle(v)} className="p-2 bg-slate-50 dark:bg-slate-800 rounded-lg hover:text-sle-red"><Trash2 className="w-4 h-4" /></button>
+                                         <button onClick={() => onCancelVehicle(v.id)} className="p-2 bg-slate-50 dark:bg-slate-800 rounded-lg hover:text-sle-red" title="Cancelar Viagem"><Trash2 className="w-4 h-4" /></button>
                                      </div>
                                  </div>
                              );
@@ -631,13 +699,9 @@ function doPost(e) {
          {/* SETTINGS TAB */}
          {activeTab === 'settings' && (
              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in">
-                {/* Coluna 1: Configuração da URL */}
                  <div className="lg:col-span-6 space-y-6">
                     <Card className="dark:bg-slate-900">
                         <h3 className="text-xl font-bold mb-2 flex items-center gap-2"><Link className="w-5 h-5"/> Conexão Google Sheets</h3>
-                        <p className="text-sm text-slate-500 mb-4">
-                            Para que os dados apareçam na planilha, você precisa criar um <strong>Web App</strong> no Google Apps Script e colar a URL aqui.
-                        </p>
                         <form onSubmit={handleSettingsSubmit} className="space-y-4">
                              <div>
                                  <label className={labelClassName}>URL do Web App (Termina em /exec)</label>
@@ -649,7 +713,7 @@ function doPost(e) {
                                  />
                              </div>
                              <div className="flex gap-2">
-                                <Button type="button" variant="secondary" className="flex-1" onClick={handleTestConnection} icon={<Zap className="w-4 h-4"/>}>
+                                <Button type="button" variant="secondary" className="flex-1" onClick={() => onTestSettings(settingsForm.googleSheetsUrl)} icon={<Zap className="w-4 h-4"/>}>
                                     Testar Integração
                                 </Button>
                                 <Button type="submit" className="flex-[2]">Salvar Conexão</Button>
@@ -657,24 +721,28 @@ function doPost(e) {
                         </form>
                     </Card>
 
-                    {/* Backup Section */}
                     <Card className="dark:bg-slate-900 border-t-4 border-t-blue-500">
                         <h3 className="text-lg font-bold mb-2 flex items-center gap-2"><FileJson className="w-5 h-5"/> Backup e Persistência</h3>
-                        <p className="text-xs text-slate-500 mb-4">
-                            Como este sistema não possui banco de dados online, os dados ficam salvos apenas neste navegador. 
-                            Para usar em outro computador ou garantir segurança, baixe o backup regularmente.
-                        </p>
                         <div className="flex gap-3">
-                            <Button variant="outline" onClick={handleExportData} icon={<Download className="w-4 h-4"/>} className="flex-1">
+                            <Button variant="outline" onClick={() => {
+                                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
+                                const dl = document.createElement('a');
+                                dl.setAttribute("href", dataStr);
+                                dl.setAttribute("download", "sao_luiz_backup.json");
+                                dl.click();
+                            }} icon={<Download className="w-4 h-4"/>} className="flex-1">
                                 Baixar Dados
                             </Button>
                             <div className="relative flex-1">
-                                <input 
-                                    type="file" 
-                                    accept=".json" 
-                                    onChange={handleImportData}
-                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                />
+                                <input type="file" accept=".json" onChange={(e) => {
+                                    if (e.target.files?.[0]) {
+                                        const fr = new FileReader();
+                                        fr.onload = (ev) => {
+                                            if (ev.target?.result) onImportData(JSON.parse(ev.target.result as string));
+                                        };
+                                        fr.readAsText(e.target.files[0]);
+                                    }
+                                }} className="absolute inset-0 opacity-0 cursor-pointer" />
                                 <Button variant="secondary" icon={<Upload className="w-4 h-4"/>} className="w-full">
                                     Restaurar
                                 </Button>
@@ -683,25 +751,23 @@ function doPost(e) {
                     </Card>
                  </div>
 
-                 {/* Coluna 2: Tutorial do Apps Script */}
                  <div className="lg:col-span-6">
                     <Card className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
                         <h3 className="text-sm font-bold uppercase text-slate-500 mb-3 flex items-center gap-2">
-                            <HelpCircle className="w-4 h-4"/> Como configurar a Planilha
+                            <HelpCircle className="w-4 h-4"/> Novo Script Seguro (Obrigatório)
                         </h3>
-                        <ol className="list-decimal list-inside text-sm space-y-2 text-slate-700 dark:text-slate-300 mb-4">
-                            <li>Crie uma planilha nova no Google Sheets.</li>
-                            <li>Vá em <strong>Extensões</strong> {'>'} <strong>Apps Script</strong>.</li>
-                            <li>Apague todo o código e cole o <strong>novo código abaixo</strong>.</li>
-                            <li>Clique no botão azul <strong>Implantar</strong> {'>'} <strong>Gerenciar implantações</strong>.</li>
-                            <li>Clique em <strong>Editar (Lápis)</strong>.</li>
-                            <li>Em Versão, escolha <strong>Nova versão</strong>. (Essencial!)</li>
-                            <li>Quem pode acessar: <strong>Qualquer pessoa</strong>.</li>
-                            <li>Copie a URL e cole aqui.</li>
+                        <p className="text-xs text-slate-500 mb-2">
+                            Atenção: Se você clicou em "Executar" no Apps Script e deu erro, é normal. Você deve <b>Implantar</b>.
+                        </p>
+                        <ol className="list-decimal list-inside text-xs space-y-1 text-slate-700 dark:text-slate-300 mb-4">
+                            <li>Copie o código abaixo e substitua TUDO no Apps Script.</li>
+                            <li>Clique em <b>Implantar > Gerenciar implantações</b>.</li>
+                            <li>Clique no Lápis (Editar).</li>
+                            <li>Mude a Versão para <b>"Nova versão"</b> (CRUCIAL!).</li>
+                            <li>Clique em Implantar e use a nova URL.</li>
                         </ol>
-                        
                         <div className="relative group">
-                            <pre className="bg-slate-900 text-slate-50 p-4 rounded-xl text-xs font-mono overflow-x-auto whitespace-pre-wrap border border-slate-700 h-64">
+                            <pre className="bg-slate-900 text-slate-50 p-4 rounded-xl text-[10px] font-mono overflow-x-auto whitespace-pre-wrap border border-slate-700 h-64">
                                 {appsScriptCode}
                             </pre>
                             <button 

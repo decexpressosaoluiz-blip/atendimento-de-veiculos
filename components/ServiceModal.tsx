@@ -1,6 +1,7 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Vehicle, Employee } from '../types';
-import { Camera, X, Trash2, UserCheck, CheckCircle2, ImagePlus, RefreshCw, Smartphone, Loader2, ZoomIn, Sparkles, AlertTriangle, Focus, UserX } from 'lucide-react';
+import { Camera, X, Trash2, UserCheck, CheckCircle2, ImagePlus, RefreshCw, Smartphone, Loader2, ZoomIn, AlertTriangle, UserX } from 'lucide-react';
 import { Button } from './Button';
 import { savePreference, getPreference } from '../services/storage';
 import { analyzeServicePhoto } from '../services/geminiService';
@@ -13,7 +14,7 @@ interface ServiceModalProps {
 }
 
 interface PhotoAnalysis {
-  id: string; // match with photo index/url
+  id: string;
   loading: boolean;
   data?: {
     isVehicle: boolean;
@@ -30,17 +31,14 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [tempPhoto, setTempPhoto] = useState<string | null>(null);
   
-  // Load saved preference for camera mode
+  // Load saved preference for camera mode (Default to 'environment' - Rear Camera)
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>(() => {
     return getPreference('cameraFacingMode', 'environment');
   });
   
-  // Zoom & Focus State
   const [zoom, setZoom] = useState(1);
   const [zoomCapabilities, setZoomCapabilities] = useState<{min: number, max: number, step: number} | null>(null);
-  const [focusPoint, setFocusPoint] = useState<{x: number, y: number, visible: boolean} | null>(null);
   
-  // State for success feedback
   const [isSuccess, setIsSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
@@ -50,14 +48,12 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // Cleanup camera on unmount
   useEffect(() => {
     return () => {
       stopCamera();
     };
   }, []);
 
-  // Attach stream to video element when camera opens
   useEffect(() => {
     if (isCameraOpen && streamRef.current && videoRef.current) {
       videoRef.current.srcObject = streamRef.current;
@@ -91,7 +87,6 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
             const result = ev.target!.result as string;
             setPhotos(prev => {
               const newPhotos = [...prev, result];
-              // Trigger AI analysis for the new photo index
               processPhotoWithAI(result, newPhotos.length - 1);
               return newPhotos;
             });
@@ -115,14 +110,15 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
         video: { 
           facingMode: mode,
           width: { ideal: 1920 }, 
-          height: { ideal: 1080 },
-          // Try to request continuous focus initially
-          advanced: [{ focusMode: 'continuous' }] as any
+          height: { ideal: 1080 }
         } 
       });
       streamRef.current = stream;
+      
+      // Save preference on success
       setFacingMode(mode);
       savePreference('cameraFacingMode', mode);
+      
       setIsCameraOpen(true);
       setTempPhoto(null);
       
@@ -139,8 +135,6 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
           max: capabilities.zoom.max,
           step: capabilities.zoom.step
         });
-        const settings = track.getSettings() as any;
-        setZoom(settings.zoom || capabilities.zoom.min);
       }
 
     } catch (err) {
@@ -172,65 +166,6 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
     if (streamRef.current) {
       const track = streamRef.current.getVideoTracks()[0];
       track.applyConstraints({ advanced: [{ zoom: newZoom } as any] }).catch(err => console.debug("Zoom apply failed", err));
-    }
-  };
-
-  // Enhanced Logic for Tap to Focus
-  const handleTapToFocus = async (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!videoRef.current || !streamRef.current) return;
-
-    // 1. Visual Feedback
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    setFocusPoint({ x, y, visible: true });
-    setTimeout(() => {
-        setFocusPoint(prev => prev ? { ...prev, visible: false } : null);
-    }, 1000);
-
-    // 2. Attempt Hardware Focus Force
-    const track = streamRef.current.getVideoTracks()[0];
-    const capabilities = (track.getCapabilities ? track.getCapabilities() : {}) as any;
-
-    if (capabilities.focusMode) {
-        try {
-            // Strategy: "Shock" the lens.
-            // Many browsers ignore a simple applyConstraints if the mode is already set.
-            // We try to toggle to a different mode (like manual or single-shot) and back to continuous,
-            // or use pointsOfInterest if available.
-
-            const constraints: any = { advanced: [] };
-            
-            // If pointsOfInterest is supported (rare on web, but worth a try)
-            // Note: Coordinates usually normalized 0..1
-            // This is highly experimental in Web specs
-            /* 
-            if (capabilities.pointsOfInterest) {
-               constraints.advanced.push({ 
-                 pointsOfInterest: [{ x: x / rect.width, y: y / rect.height }] 
-               });
-            } 
-            */
-
-            // Force re-focus by toggling mode
-            if (capabilities.focusMode.includes('single-shot')) {
-                // Single-shot is the best for "Tap to Focus"
-                await track.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] as any });
-            } else if (capabilities.focusMode.includes('manual')) {
-                 // Hack: Switch to manual (locks focus), wait split second, switch back to continuous (triggers search)
-                 await track.applyConstraints({ advanced: [{ focusMode: 'manual' }] as any });
-                 setTimeout(async () => {
-                    await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] as any });
-                 }, 200);
-            } else {
-                 // Just re-apply continuous hoping it triggers
-                 await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] as any });
-            }
-
-        } catch (err) {
-            console.debug("Focus constraint failed", err);
-        }
     }
   };
 
@@ -266,20 +201,8 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
     }
   };
 
-  const retakePhoto = () => {
-    setTempPhoto(null);
-  };
-
   const removePhoto = (index: number) => {
     setPhotos(prev => prev.filter((_, i) => i !== index));
-    // Also cleanup analysis state
-    const newAnalyses: Record<number, PhotoAnalysis> = {};
-    Object.keys(photoAnalyses).forEach(k => {
-        const key = parseInt(k);
-        if(key < index) newAnalyses[key] = photoAnalyses[key];
-        if(key > index) newAnalyses[key - 1] = photoAnalyses[key];
-    });
-    setPhotoAnalyses(newAnalyses);
   };
 
   const handleClose = () => {
@@ -300,11 +223,11 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
-      <div className="relative bg-white w-full max-w-2xl rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-10 fade-in duration-300 flex flex-col max-h-[90vh] sm:max-h-[85vh]">
+      <div className="relative bg-white w-full max-w-2xl rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] sm:max-h-[85vh]">
         
         {isSuccess && (
           <div className="absolute top-6 left-1/2 transform -translate-x-1/2 z-[60] w-[90%] max-w-sm pointer-events-none">
-            <div className="bg-emerald-600 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-4 animate-in slide-in-from-top-4 fade-in duration-300 border border-emerald-500/50">
+            <div className="bg-emerald-600 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-4 border border-emerald-500/50">
               <div className="bg-white/20 p-2 rounded-full">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
@@ -327,7 +250,7 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
         </div>
         
         <div className="overflow-y-auto p-4 space-y-6 flex-1 relative">
-          {isSuccess && <div className="absolute inset-0 bg-white/50 z-40 backdrop-blur-[1px] transition-all duration-300" />}
+          {isSuccess && <div className="absolute inset-0 bg-white/50 z-40 backdrop-blur-[1px]" />}
 
           {/* 1. Employee Selection */}
           {!isCameraOpen && (
@@ -337,7 +260,6 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
                 <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl p-6 flex flex-col items-center justify-center text-center">
                    <UserX className="w-8 h-8 text-slate-300 mb-2" />
                    <p className="text-sm font-bold text-slate-500">Nenhum funcionário cadastrado</p>
-                   <p className="text-xs text-slate-400 mt-1">Contate o administrador para adicionar a equipe desta unidade.</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -370,46 +292,16 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
 
           {/* 2. Photo Registration with AI */}
           <section className="flex-1 flex flex-col">
-             {!isCameraOpen && <label className="text-sm font-bold text-sle-navy uppercase tracking-wider mb-3 block">2. Registro Fotográfico Inteligente</label>}
+             {!isCameraOpen && <label className="text-sm font-bold text-sle-navy uppercase tracking-wider mb-3 block">2. Registro Fotográfico</label>}
              
              {isCameraOpen ? (
-               <div 
-                 className="relative bg-black rounded-xl overflow-hidden aspect-[3/4] sm:aspect-video flex items-center justify-center shadow-inner cursor-crosshair"
-                 onClick={handleTapToFocus}
-               >
-                 <video 
-                   ref={videoRef} 
-                   autoPlay 
-                   playsInline 
-                   muted 
-                   className={`w-full h-full object-cover ${tempPhoto ? 'hidden' : 'block'}`} 
-                 />
-                 
-                 {/* Focus Reticle Animation */}
-                 {focusPoint && focusPoint.visible && !tempPhoto && (
-                    <div 
-                        className="absolute border-2 border-yellow-400 w-16 h-16 rounded-lg pointer-events-none animate-in zoom-in-50 fade-out duration-700 shadow-[0_0_10px_rgba(250,204,21,0.5)]"
-                        style={{ 
-                            left: focusPoint.x, 
-                            top: focusPoint.y, 
-                            transform: 'translate(-50%, -50%)' 
-                        }}
-                    >
-                        <div className="absolute top-1/2 left-1/2 w-1 h-1 bg-yellow-400 rounded-full transform -translate-x-1/2 -translate-y-1/2" />
-                    </div>
-                 )}
-                 
-                 {tempPhoto && (
-                   <img 
-                     src={tempPhoto} 
-                     alt="Preview" 
-                     className="absolute inset-0 w-full h-full object-cover"
-                   />
-                 )}
+               <div className="relative bg-black rounded-xl overflow-hidden aspect-[3/4] sm:aspect-video flex items-center justify-center shadow-inner">
+                 <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${tempPhoto ? 'hidden' : 'block'}`} />
+                 {tempPhoto && <img src={tempPhoto} alt="Preview" className="absolute inset-0 w-full h-full object-cover" />}
                  
                  {zoomCapabilities && !tempPhoto && (
-                   <div className="absolute bottom-28 inset-x-0 flex justify-center items-center z-20 pointer-events-none">
-                     <div onClick={(e) => e.stopPropagation()} className="bg-black/50 backdrop-blur-sm px-4 py-2 rounded-full flex items-center gap-3 pointer-events-auto border border-white/10 shadow-lg w-64 animate-in fade-in slide-in-from-bottom-4">
+                   <div className="absolute bottom-28 inset-x-0 flex justify-center items-center z-20">
+                     <div className="bg-black/50 backdrop-blur-sm px-4 py-2 rounded-full flex items-center gap-3 border border-white/10">
                         <ZoomIn className="w-4 h-4 text-white/70" />
                         <input 
                           type="range"
@@ -418,73 +310,52 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
                           step={zoomCapabilities.step}
                           value={zoom}
                           onChange={handleZoomChange}
-                          className="flex-1 h-1.5 bg-white/30 rounded-full appearance-none cursor-pointer accent-white [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
+                          className="w-32 h-1.5 bg-white/30 rounded-full appearance-none cursor-pointer accent-white"
                         />
-                        <span className="text-xs font-bold text-white min-w-[2rem] text-right">{zoom.toFixed(1)}x</span>
+                        <span className="text-xs font-bold text-white">{zoom.toFixed(1)}x</span>
                      </div>
                    </div>
                  )}
 
-                 {/* Camera Controls */}
-                 <div onClick={(e) => e.stopPropagation()} className="absolute bottom-6 inset-x-0 flex items-center justify-center gap-4 z-10 px-4">
+                 <div className="absolute bottom-6 inset-x-0 flex items-center justify-center gap-4 z-10 px-4">
                    {!tempPhoto ? (
                      <>
-                       <button type="button" onClick={stopCamera} className="bg-white/20 hover:bg-white/30 backdrop-blur-md p-3 rounded-full text-white transition-all"><X className="w-6 h-6" /></button>
+                       <button type="button" onClick={stopCamera} className="bg-white/20 hover:bg-white/30 backdrop-blur-md p-3 rounded-full text-white"><X className="w-6 h-6" /></button>
                        <button type="button" onClick={capturePhoto} className="bg-white p-1.5 rounded-full shadow-lg transform active:scale-95 transition-all hover:shadow-xl hover:scale-105">
                          <div className="w-16 h-16 rounded-full border-4 border-sle-blue bg-white flex items-center justify-center">
                             <Camera className="w-8 h-8 text-sle-blue" />
                          </div>
                        </button>
-                       <button type="button" onClick={switchCamera} className="bg-white/20 hover:bg-white/30 backdrop-blur-md p-3 rounded-full text-white transition-all"><RefreshCw className="w-6 h-6" /></button>
+                       <button type="button" onClick={switchCamera} className="bg-white/20 hover:bg-white/30 backdrop-blur-md p-3 rounded-full text-white"><RefreshCw className="w-6 h-6" /></button>
                      </>
                    ) : (
                      <>
-                       <button type="button" onClick={retakePhoto} className="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-2 transition-all"><RefreshCw className="w-5 h-5" /><span className="font-bold">Repetir</span></button>
-                       <button type="button" onClick={confirmPhoto} className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-2 transition-all"><CheckCircle2 className="w-5 h-5" /><span className="font-bold">Usar Foto</span></button>
+                       <button type="button" onClick={() => setTempPhoto(null)} className="bg-red-500 text-white px-6 py-3 rounded-full shadow-lg font-bold flex items-center gap-2"><RefreshCw className="w-5 h-5" /> Repetir</button>
+                       <button type="button" onClick={confirmPhoto} className="bg-green-600 text-white px-6 py-3 rounded-full shadow-lg font-bold flex items-center gap-2"><CheckCircle2 className="w-5 h-5" /> Usar Foto</button>
                      </>
                    )}
                  </div>
-                 
-                 {/* Hint for tap to focus */}
-                 {!tempPhoto && (
-                    <div className="absolute top-4 inset-x-0 text-center pointer-events-none opacity-60">
-                        <span className="text-[10px] bg-black/30 backdrop-blur-md text-white px-3 py-1 rounded-full">
-                            Toque na tela para focar
-                        </span>
-                    </div>
-                 )}
                </div>
              ) : (
                <div className="space-y-4">
                  {photos.length > 0 && (
-                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                   <div className="grid grid-cols-2 gap-3 mb-4">
                      {photos.map((photo, idx) => {
                        const analysis = photoAnalyses[idx];
                        return (
                          <div key={idx} className="relative rounded-xl overflow-hidden border border-slate-200 shadow-sm group bg-slate-50">
-                           <div className="flex h-24">
-                              <img src={photo} alt="Proof" className="w-24 h-24 object-cover" />
-                              <div className="p-3 flex-1 flex flex-col justify-center">
+                           <img src={photo} alt="Proof" className="w-full h-24 object-cover" />
+                           <div className="p-2">
                                 {analysis?.loading ? (
-                                    <div className="flex items-center gap-2 text-sle-blue text-xs font-bold animate-pulse">
-                                        <Loader2 className="w-3 h-3 animate-spin" />
-                                        Analisando imagem...
+                                    <div className="flex items-center gap-1 text-sle-blue text-[10px] font-bold animate-pulse">
+                                        <Loader2 className="w-3 h-3 animate-spin" /> Analisando...
                                     </div>
                                 ) : analysis?.data ? (
-                                    <div className="space-y-1">
-                                        <div className={`flex items-center gap-1.5 text-xs font-bold ${analysis.data.isVehicle ? 'text-green-600' : 'text-amber-600'}`}>
-                                            {analysis.data.isVehicle ? <CheckCircle2 className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
-                                            {analysis.data.isVehicle ? "Veículo Identificado" : "Atenção: Imagem Duvidosa"}
-                                        </div>
-                                        <p className="text-[10px] text-slate-500 leading-tight line-clamp-2">{analysis.data.description}</p>
-                                        {analysis.data.issues.length > 0 && (
-                                           <p className="text-[9px] text-red-400 font-medium">{analysis.data.issues[0]}</p>
-                                        )}
+                                    <div className={`flex items-center gap-1 text-[10px] font-bold ${analysis.data.isVehicle ? 'text-green-600' : 'text-amber-600'}`}>
+                                        {analysis.data.isVehicle ? <CheckCircle2 className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                                        {analysis.data.isVehicle ? "Veículo OK" : "Duvidoso"}
                                     </div>
-                                ) : (
-                                    <span className="text-xs text-slate-400">Aguardando IA...</span>
-                                )}
-                              </div>
+                                ) : null}
                            </div>
                            <button type="button" onClick={() => removePhoto(idx)} disabled={isSaving} className="absolute top-2 right-2 bg-white/80 hover:bg-red-50 text-slate-400 hover:text-red-500 p-1.5 rounded-full transition-all">
                              <Trash2 className="w-4 h-4" />
@@ -496,22 +367,19 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
                  )}
 
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <button type="button" onClick={() => startCamera(facingMode)} disabled={isSaving} className="h-24 sm:h-32 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 hover:bg-blue-50 hover:border-sle-blue transition-all flex sm:flex-col items-center justify-center gap-4 sm:gap-2 group px-4 disabled:opacity-50">
-                       <div className="bg-white p-2.5 rounded-full shadow-sm group-hover:scale-110 transition-transform border border-slate-100"><Camera className="w-6 h-6 sm:w-8 sm:h-8 text-sle-blue" /></div>
-                       <div className="text-left sm:text-center">
-                         <span className="block text-sm font-bold text-sle-navy group-hover:text-sle-blue">Câmera Inteligente</span>
-                         <span className="block text-xs text-slate-500">Com Visão Computacional</span>
-                       </div>
+                    <button type="button" onClick={() => startCamera(facingMode)} disabled={isSaving} className="h-24 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 hover:bg-blue-50 hover:border-sle-blue transition-all flex flex-col items-center justify-center gap-2 group disabled:opacity-50">
+                       <div className="bg-white p-2 rounded-full shadow-sm group-hover:scale-110 transition-transform border border-slate-100"><Camera className="w-6 h-6 text-sle-blue" /></div>
+                       <span className="text-sm font-bold text-sle-navy">Câmera Inteligente</span>
                     </button>
 
                     <div className="grid grid-cols-2 gap-3">
-                       <button type="button" onClick={() => nativeCameraInputRef.current?.click()} disabled={isSaving} className="h-24 sm:h-32 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 hover:bg-blue-50 hover:border-sle-blue transition-all flex flex-col items-center justify-center gap-2 group p-2 disabled:opacity-50">
-                         <div className="bg-white p-2 rounded-full shadow-sm group-hover:scale-110 transition-transform border border-slate-100"><Smartphone className="w-5 h-5 text-slate-700 group-hover:text-sle-blue" /></div>
-                         <span className="text-xs font-bold text-sle-navy group-hover:text-sle-blue text-center leading-tight">Câmera<br/>Nativa</span>
+                       <button type="button" onClick={() => nativeCameraInputRef.current?.click()} disabled={isSaving} className="h-24 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 hover:bg-blue-50 hover:border-sle-blue transition-all flex flex-col items-center justify-center gap-1 group disabled:opacity-50">
+                         <div className="bg-white p-1.5 rounded-full shadow-sm group-hover:scale-110 transition-transform border border-slate-100"><Smartphone className="w-4 h-4 text-slate-700" /></div>
+                         <span className="text-xs font-bold text-slate-600 text-center">Nativa</span>
                       </button>
-                      <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isSaving} className="h-24 sm:h-32 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 hover:bg-blue-50 hover:border-sle-blue transition-all flex flex-col items-center justify-center gap-2 group p-2 disabled:opacity-50">
-                         <div className="bg-white p-2 rounded-full shadow-sm group-hover:scale-110 transition-transform border border-slate-100"><ImagePlus className="w-5 h-5 text-slate-700 group-hover:text-sle-blue" /></div>
-                         <span className="text-xs font-bold text-sle-navy group-hover:text-sle-blue text-center leading-tight">Galeria<br/>de Fotos</span>
+                      <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isSaving} className="h-24 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 hover:bg-blue-50 hover:border-sle-blue transition-all flex flex-col items-center justify-center gap-1 group disabled:opacity-50">
+                         <div className="bg-white p-1.5 rounded-full shadow-sm group-hover:scale-110 transition-transform border border-slate-100"><ImagePlus className="w-4 h-4 text-slate-700" /></div>
+                         <span className="text-xs font-bold text-slate-600 text-center">Galeria</span>
                       </button>
                     </div>
                  </div>
