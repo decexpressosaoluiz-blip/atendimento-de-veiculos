@@ -2,7 +2,7 @@
 import { Unit, Employee, Vehicle, VehicleStatus, AppState, UserAccount } from './types';
 
 // URL Fixa do Google Apps Script - Atualizada para a nova implantação
-export const GLOBAL_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbykSh8MvA3fMkJIREzeEbDgvLe9sk-w64pWDFpLWtEnToZ_AMZrISp8FXM1IT1vMGQYDg/exec"; 
+export const GLOBAL_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxl2QDw6Jhl15mc8PoAa5FJqNNDUhw44PF0tEUiI55e5eky4VYgPpfGaML0bW7gAMI4VQ/exec"; 
 
 export const INITIAL_UNITS: Unit[] = [
   { id: 'u1', name: 'DEC - MATRIZ', location: 'Matriz Administrativa', alarmIntervalMinutes: 60 },
