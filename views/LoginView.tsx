@@ -46,11 +46,16 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, onSyncUrl 
 
   const handleSyncSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-      // Remove invisible characters and spaces
-      const cleanUrl = syncUrl.trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
+      // Remove invisible characters, newlines, and ALL spaces
+      const cleanUrl = syncUrl.replace(/\s/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '');
 
       if (cleanUrl.length < 10 || !cleanUrl.toLowerCase().startsWith('http')) {
           setSyncMessage({ text: "URL inválida. Copie o link 'Web App URL' completo.", type: 'error' });
+          return;
+      }
+
+      if (!cleanUrl.endsWith('/exec')) {
+          setSyncMessage({ text: "A URL deve terminar em '/exec'. Verifique se copiou corretamente.", type: 'error' });
           return;
       }
 
@@ -69,7 +74,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, onSyncUrl 
           let msg = err.message || "Erro desconhecido";
           
           if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
-              msg = "Falha de Conexão. Verifique se a implantação está definida como 'Qualquer pessoa' (Anyone). Execute 'doGet' no editor para autorizar.";
+              msg = "Falha de Conexão. (1) Verifique a internet. (2) O Script DEVE estar publicado como 'Qualquer pessoa' (Anyone).";
           }
           
           setSyncMessage({ text: msg, type: 'error' });

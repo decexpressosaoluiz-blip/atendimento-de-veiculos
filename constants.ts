@@ -2,7 +2,8 @@
 import { Unit, Employee, Vehicle, VehicleStatus, AppState, UserAccount } from './types';
 
 // URL Fixa do Google Apps Script (Deixe vazio para configurar via UI)
-export const GLOBAL_APPS_SCRIPT_URL = ""; 
+// A URL abaixo foi inserida para facilitar o acesso, mas requer permissões 'Anyone' no Google.
+export const GLOBAL_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxk06K6RNgmxgMO4jYQVByGG7co5G2D5FyTEqWy2ib0c5jFMo1V7MYkfKiskWkNT4TNHw/exec"; 
 
 export const INITIAL_UNITS: Unit[] = [
   { id: 'u1', name: 'DEC - MATRIZ', location: 'Matriz Administrativa', alarmIntervalMinutes: 60 },

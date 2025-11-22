@@ -50,8 +50,8 @@ const App: React.FC = () => {
 
   // Function to fetch data from cloud (Reusable)
   const performCloudSync = async (url: string) => {
-     // Aggressive cleaning for mobile copy-paste artifacts
-     let cleanUrl = (url || '').trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
+     // Aggressive cleaning for mobile copy-paste artifacts: removes all whitespace and invisible chars
+     let cleanUrl = (url || '').replace(/\s/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '');
      
      if (!cleanUrl) return false;
 
@@ -188,7 +188,7 @@ const App: React.FC = () => {
       const debouncedSave = setTimeout(async () => {
         setSyncStatus('syncing');
         try {
-          let cleanUrl = url.trim();
+          let cleanUrl = url.replace(/\s/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '');
           if (cleanUrl.includes('/edit')) cleanUrl = cleanUrl.replace(/\/edit.*/, '/exec');
 
           // Prepare state for sync
@@ -254,7 +254,7 @@ const App: React.FC = () => {
       if (!url) return;
       
       try {
-           let cleanUrl = url.trim();
+           let cleanUrl = url.replace(/\s/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '');
            if (cleanUrl.includes('/edit')) cleanUrl = cleanUrl.replace(/\/edit.*/, '/exec');
 
            // Process Photos Compression if needed
@@ -288,7 +288,7 @@ const App: React.FC = () => {
   const handleTestSettings = async (url: string) => {
       if (!url) return;
       try {
-           let cleanUrl = url.trim();
+           let cleanUrl = url.replace(/\s/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '');
            if (cleanUrl.includes('/edit')) cleanUrl = cleanUrl.replace(/\/edit.*/, '/exec');
 
            const payload = { 
