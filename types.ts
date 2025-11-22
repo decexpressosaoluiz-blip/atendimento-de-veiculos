@@ -81,4 +81,5 @@ export interface AppState {
   vehicles: Vehicle[];
   justifications: Justification[];
   alarms: AlarmLog[];
+  googleSheetsUrl?: string; // URL do Web App do Google Script
 }

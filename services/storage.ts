@@ -1,4 +1,5 @@
-import { AppState } from '../types';
+
+import { AppState, VehicleStatus } from '../types';
 import { INITIAL_STATE } from '../constants';
 
 const DATA_KEY = 'sle_app_data_v2';
@@ -34,9 +35,35 @@ export const loadState = (): AppState => {
   return state;
 };
 
+// --- Storage Cleaning Logic ---
+const cleanOldPhotos = (state: AppState): AppState => {
+  // Finds COMPLETED vehicles with photos and removes the photos to free up space
+  // Sort by date (oldest first) roughly by ID or implicit order if no timestamp, but completed usually has timestamp.
+  
+  const completedVehicles = state.vehicles
+    .filter(v => v.status === VehicleStatus.COMPLETED && v.servicePhotos && v.servicePhotos.length > 0)
+    .sort((a, b) => {
+       const tA = a.serviceTimestamp ? new Date(a.serviceTimestamp).getTime() : 0;
+       const tB = b.serviceTimestamp ? new Date(b.serviceTimestamp).getTime() : 0;
+       return tA - tB;
+    });
+
+  if (completedVehicles.length === 0) return state;
+
+  // Remove photos from the oldest vehicle
+  const targetId = completedVehicles[0].id;
+  console.log(`Cleaning storage: Removing photos from vehicle ${targetId}`);
+
+  return {
+    ...state,
+    vehicles: state.vehicles.map(v => 
+      v.id === targetId ? { ...v, servicePhotos: [] } : v
+    )
+  };
+};
+
 export const saveState = (state: AppState) => {
   // 1. Save Session Separately (Small & Critical)
-  // This ensures login persists even if the main data storage is full (e.g. too many photos)
   try {
     if (state.currentUser) {
       localStorage.setItem(SESSION_KEY, JSON.stringify(state.currentUser));
@@ -44,17 +71,35 @@ export const saveState = (state: AppState) => {
       localStorage.removeItem(SESSION_KEY);
     }
   } catch (e) {
-    console.error("Failed to save session - Login might be lost on refresh", e);
+    console.error("Failed to save session", e);
   }
 
   // 2. Save Main Data (Heavy)
-  try {
-    localStorage.setItem(DATA_KEY, JSON.stringify(state));
-  } catch (e) {
-    // Specific handling for QuotaExceededError would go here
-    console.error("Failed to save app data (likely Storage Quota Exceeded)", e);
-    console.warn("Data changes might not persist, but session is safe.");
-  }
+  const trySave = (dataToSave: AppState, attempt = 1): void => {
+      try {
+        localStorage.setItem(DATA_KEY, JSON.stringify(dataToSave));
+      } catch (e: any) {
+        if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+           console.warn(`Storage Quota Exceeded (Attempt ${attempt}). Cleaning old data...`);
+           if (attempt > 20) {
+               alert("CRÍTICO: Armazenamento cheio. Não é possível salvar mais dados. Contate o suporte.");
+               return;
+           }
+           // Recursive cleanup
+           const cleanedState = cleanOldPhotos(dataToSave);
+           // If cleaning didn't change anything, we can't save. Stop to avoid infinite loop.
+           if (cleanedState === dataToSave) {
+               console.error("Storage full and no photos left to clean.");
+               return;
+           }
+           trySave(cleanedState, attempt + 1);
+        } else {
+            console.error("Failed to save app data", e);
+        }
+      }
+  };
+
+  trySave(state);
 };
 
 // Helpers for User Preferences (e.g. Camera Mode)

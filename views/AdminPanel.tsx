@@ -1,9 +1,10 @@
+
 import React, { useState } from 'react';
 import { AppState, JustificationStatus, Employee, Vehicle, VehicleStatus, UserAccount } from '../types';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
-import { Check, X, Download, Sparkles, Plus, Truck, Users, Clock, Power, Edit, Save, Ban, Trash2, Lock, AlertTriangle, Search, Filter, Activity, Key, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { Check, X, Download, Sparkles, Plus, Truck, Users, Clock, Power, Edit, Save, Ban, Trash2, Lock, AlertTriangle, Search, Filter, Activity, Key, ShieldCheck, CheckCircle2, Settings, Link } from 'lucide-react';
 
 interface AdminPanelProps {
   state: AppState;
@@ -18,6 +19,7 @@ interface AdminPanelProps {
   onDeleteEmployee: (id: string) => void;
   onAddUser: (user: UserAccount) => void;
   onDeleteUser: (userId: string) => void;
+  onUpdateSettings: (settings: { googleSheetsUrl: string }) => void;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ 
@@ -32,9 +34,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onToggleEmployeeStatus,
   onDeleteEmployee,
   onAddUser,
-  onDeleteUser
+  onDeleteUser,
+  onUpdateSettings
 }) => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'validations' | 'fleet' | 'team' | 'access'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'validations' | 'fleet' | 'team' | 'access' | 'settings'>('dashboard');
   
   // --- FEEDBACK STATE ---
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
@@ -72,6 +75,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     unitId: state.units[0]?.id || ''
   });
 
+  // --- SETTINGS FORM STATE ---
+  const [settingsForm, setSettingsForm] = useState({
+    googleSheetsUrl: state.googleSheetsUrl || ''
+  });
+
   // Analytics Data
   const totalVehicles = state.vehicles.length;
   const serviced = state.vehicles.filter(v => v.status === 'COMPLETED').length;
@@ -90,7 +98,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   }, {} as Record<string, number>);
 
   const justificationChartData = Object.entries(justificationReasons)
-    .map(([name, value]) => ({ name, value }))
+    .map(([name, value]) => ({ name, value: Number(value) }))
     .sort((a, b) => b.value - a.value); // Sort descending
 
   // CORES DO GRÁFICO
@@ -181,6 +189,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setDeleteTarget(null);
     setDeletePassword('');
     setDeleteError('');
+  };
+
+  // --- SETTINGS HANDLER ---
+  const handleSettingsSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onUpdateSettings({ googleSheetsUrl: settingsForm.googleSheetsUrl });
+    showToast("Configurações salvas!");
   };
 
   // --- VEHICLE HANDLERS ---
@@ -420,6 +435,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <button onClick={() => setActiveTab('access')} className={`px-5 py-2.5 rounded-lg text-sm font-bold transition-all duration-300 whitespace-nowrap flex items-center gap-2 ${activeTab === 'access' ? 'bg-sle-navy text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-sle-blue dark:hover:text-blue-400'}`}>
               <Key className="w-4 h-4" /> Acessos
             </button>
+            <button onClick={() => setActiveTab('settings')} className={`px-5 py-2.5 rounded-lg text-sm font-bold transition-all duration-300 whitespace-nowrap flex items-center gap-2 ${activeTab === 'settings' ? 'bg-sle-navy text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-sle-blue dark:hover:text-blue-400'}`}>
+              <Settings className="w-4 h-4" /> Config
+            </button>
           </div>
         </div>
 
@@ -529,6 +547,66 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
         )}
 
+        {activeTab === 'settings' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in duration-300">
+             <div className="space-y-6">
+                <Card className="shadow-lg border-t-4 border-t-sle-blue dark:bg-slate-900">
+                  <h3 className="text-xl font-bold text-sle-navy dark:text-white flex items-center gap-2 mb-6">
+                    <Link className="w-6 h-6 text-sle-blue dark:text-blue-400" />
+                    Integração Google Sheets
+                  </h3>
+                  
+                  <form onSubmit={handleSettingsSubmit} className="space-y-4">
+                     <div>
+                       <label className={labelClassName}>URL do Web App (Google Apps Script)</label>
+                       <input 
+                         type="url"
+                         placeholder="https://script.google.com/macros/s/..."
+                         value={settingsForm.googleSheetsUrl}
+                         onChange={(e) => setSettingsForm({ googleSheetsUrl: e.target.value })}
+                         className={inputClassName}
+                       />
+                       <p className="text-[10px] text-slate-400 mt-2">
+                         Cole aqui a URL gerada após implantar o script como "App da Web" na sua planilha Google.
+                       </p>
+                     </div>
+                     <Button 
+                        type="submit" 
+                        className="w-full bg-sle-blue hover:bg-sle-navy text-white"
+                        icon={<Save className="w-4 h-4" />}
+                     >
+                       Salvar Configuração
+                     </Button>
+                  </form>
+                </Card>
+
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-2xl p-6">
+                   <h4 className="font-bold text-yellow-800 dark:text-yellow-400 flex items-center gap-2 mb-2">
+                     <AlertTriangle className="w-5 h-5" />
+                     Importante
+                   </h4>
+                   <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                     Para que as imagens sejam salvas corretamente na planilha, certifique-se de implantar o script com permissão de acesso para <strong>"Qualquer pessoa" (Anyone)</strong>.
+                   </p>
+                </div>
+             </div>
+
+             <div className="space-y-6 text-slate-600 dark:text-slate-300">
+                <h4 className="font-bold uppercase tracking-wider text-xs text-slate-400">Como configurar?</h4>
+                <ol className="list-decimal pl-5 space-y-3 text-sm">
+                   <li>Crie uma nova Planilha Google.</li>
+                   <li>Vá em <strong>Extensões {'>'} Apps Script</strong>.</li>
+                   <li>Cole o código de integração fornecido pelo desenvolvedor.</li>
+                   <li>Clique em <strong>Implantar {'>'} Nova implantação</strong>.</li>
+                   <li>Escolha o tipo "App da Web".</li>
+                   <li>Em "Quem pode acessar", selecione <strong>"Qualquer pessoa"</strong>.</li>
+                   <li>Clique em Implantar, copie a URL gerada e cole no campo ao lado.</li>
+                </ol>
+             </div>
+          </div>
+        )}
+
+        {/* ... Rest of existing tabs (validations, fleet, team, access) ... */}
         {activeTab === 'validations' && (
           <div className="space-y-4 animate-in fade-in duration-300">
             {pendingJustifications.length === 0 ? (
@@ -599,11 +677,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
         {activeTab === 'fleet' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in duration-300">
-            
             {/* Vehicle Form - Col 4 */}
             <div className="lg:col-span-4">
                <div className="sticky top-24">
-                  {/* Red Border to indicate ACTION/CREATION */}
                   <Card className="border-t-4 border-t-sle-red shadow-lg dark:bg-slate-900">
                       <div className="flex items-center justify-between mb-6">
                         <div>
@@ -672,8 +748,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                 </select>
                             </div>
                         </div>
-
-                        {/* Button Red for Primary Creation Action - Balancing the Blue */}
                         <Button 
                             type="submit" 
                             className={`w-full py-4 text-base shadow-lg transition-transform active:scale-95 bg-sle-red hover:bg-sle-redDark shadow-sle-red/20`} 
@@ -696,7 +770,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     Frota Ativa ({state.vehicles.length})
                   </h3>
                   
-                  {/* Search Mockup */}
                   <div className="relative hidden md:block">
                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                      <input type="text" placeholder="Buscar veículo..." className="pl-9 pr-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm outline-none focus:ring-2 focus:ring-sle-blue/20 transition-all text-sle-navy dark:text-white" />
@@ -788,7 +861,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
              {/* Form Funcionário - Col 4 */}
              <div className="lg:col-span-4">
                <div className="sticky top-24">
-                  {/* Red Border for Action Balance */}
                   <Card className="border-t-4 border-t-sle-red shadow-lg dark:bg-slate-900">
                       <div className="flex items-center justify-between mb-6">
                         <div>
@@ -865,7 +937,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             </div>
                         </div>
 
-                        {/* Action Button - Red for Creation */}
                         <Button 
                             type="submit" 
                             className={`w-full py-4 text-base shadow-lg transition-transform active:scale-95 bg-sle-red hover:bg-sle-redDark shadow-sle-red/20`} 
@@ -894,8 +965,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     const unitName = state.units.find(u => u.id === emp.unitId)?.name || 'N/A';
                     return (
                       <div key={emp.id} className={`relative bg-white dark:bg-slate-900 p-5 rounded-2xl border shadow-sm hover:shadow-md hover:-translate-y-1 transition-all flex justify-between items-start group overflow-hidden ${emp.active ? 'border-slate-200 dark:border-slate-700' : 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 opacity-75 grayscale-[0.5]'}`}>
-                        
-                        {/* Decorative Background accent */}
                         <div className={`absolute top-0 right-0 w-20 h-20 bg-gradient-to-br ${emp.active ? 'from-sle-blue/5 dark:from-blue-500/10 to-transparent' : 'from-slate-200/20 dark:from-white/5 to-transparent'} rounded-bl-full pointer-events-none`} />
 
                         <div className="relative z-10">
@@ -1084,7 +1153,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
             </div>
         )}
-
       </div>
     </div>
   );

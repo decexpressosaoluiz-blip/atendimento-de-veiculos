@@ -1,3 +1,4 @@
+
 import { Unit, Employee, Vehicle, VehicleStatus, AppState, UserAccount } from './types';
 
 export const INITIAL_UNITS: Unit[] = [
@@ -38,13 +39,20 @@ export const JUSTIFICATION_REASONS = [
 export const INITIAL_EMPLOYEES: Employee[] = [
   {
     id: 'e-init-1',
-    name: 'Carlos Silva (Motorista)',
+    name: 'Alexandre Carlos',
     unitId: 'u1', // Vinculado à Matriz
     active: true,
     workSchedule: { days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex'], startTime: '08:00', endTime: '18:00' }
   },
   {
     id: 'e-init-2',
+    name: 'Carlos Silva (Motorista)',
+    unitId: 'u1', // Vinculado à Matriz
+    active: true,
+    workSchedule: { days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex'], startTime: '08:00', endTime: '18:00' }
+  },
+  {
+    id: 'e-init-3',
     name: 'Roberto Souza (Ajudante)',
     unitId: 'u1', // Vinculado à Matriz
     active: true,
@@ -111,4 +119,5 @@ export const INITIAL_STATE: AppState = {
   vehicles: INITIAL_VEHICLES,
   justifications: [],
   alarms: [],
+  googleSheetsUrl: ''
 };
