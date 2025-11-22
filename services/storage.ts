@@ -37,28 +37,31 @@ export const loadState = (): AppState => {
 
 // --- Storage Cleaning Logic ---
 const cleanOldPhotos = (state: AppState): AppState => {
-  // Finds COMPLETED vehicles with photos and removes the photos to free up space
-  // Sort by date (oldest first) roughly by ID or implicit order if no timestamp, but completed usually has timestamp.
-  
-  const completedVehicles = state.vehicles
-    .filter(v => v.status === VehicleStatus.COMPLETED && v.servicePhotos && v.servicePhotos.length > 0)
-    .sort((a, b) => {
-       const tA = a.serviceTimestamp ? new Date(a.serviceTimestamp).getTime() : 0;
-       const tB = b.serviceTimestamp ? new Date(b.serviceTimestamp).getTime() : 0;
-       return tA - tB;
-    });
+  // Finds COMPLETED stops with photos and removes them
+  // We need to deep clone to avoid mutation during search
+  const vehicles = JSON.parse(JSON.stringify(state.vehicles));
+  let photoFoundAndRemoved = false;
 
-  if (completedVehicles.length === 0) return state;
+  for (const v of vehicles) {
+      if (photoFoundAndRemoved) break;
+      if (!v.stops) continue;
+      
+      for (const stop of v.stops) {
+          if (stop.status === VehicleStatus.COMPLETED && stop.servicePhotos && stop.servicePhotos.length > 0) {
+              // Check age? For now, just clean the first one found if quota is full
+              stop.servicePhotos = [];
+              console.log(`Cleaning storage: Removing photos from vehicle ${v.number} stop ${stop.unitId}`);
+              photoFoundAndRemoved = true;
+              break;
+          }
+      }
+  }
 
-  // Remove photos from the oldest vehicle
-  const targetId = completedVehicles[0].id;
-  console.log(`Cleaning storage: Removing photos from vehicle ${targetId}`);
+  if (!photoFoundAndRemoved) return state;
 
   return {
     ...state,
-    vehicles: state.vehicles.map(v => 
-      v.id === targetId ? { ...v, servicePhotos: [] } : v
-    )
+    vehicles: vehicles
   };
 };
 
@@ -88,7 +91,7 @@ export const saveState = (state: AppState) => {
            // Recursive cleanup
            const cleanedState = cleanOldPhotos(dataToSave);
            // If cleaning didn't change anything, we can't save. Stop to avoid infinite loop.
-           if (cleanedState === dataToSave) {
+           if (JSON.stringify(cleanedState) === JSON.stringify(dataToSave)) {
                console.error("Storage full and no photos left to clean.");
                return;
            }

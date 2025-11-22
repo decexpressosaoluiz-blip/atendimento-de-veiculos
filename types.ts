@@ -40,28 +40,33 @@ export interface Employee {
   };
 }
 
-export interface Vehicle {
-  id: string;
-  number: string;
-  route: string; // Itinerário
-  eta: string; // ISO string for date/time
+export interface TripStop {
   unitId: string;
+  type: 'ORIGIN' | 'INTERMEDIATE' | 'DESTINATION';
+  eta: string; // ISO string date/time specific for this stop
   status: VehicleStatus;
   serviceTimestamp?: string;
   servicedByEmployeeId?: string;
-  servicePhotos?: string[]; // Base64 strings
+  servicePhotos?: string[];
+}
+
+export interface Vehicle {
+  id: string;
+  number: string;
+  route: string; // Nome da Viagem/Itinerário
+  stops: TripStop[]; // Array of stops (Origin -> [Intermediate] -> Destination)
 }
 
 export interface Justification {
   id: string;
   vehicleId: string;
-  unitId: string;
-  category: string; // Motivo padronizado
-  text: string; // Detalhes opcionais
+  unitId: string; // Unidade onde ocorreu o atraso/justificativa
+  category: string;
+  text: string;
   timestamp: string;
   status: JustificationStatus;
   adminComment?: string;
-  aiAnalysis?: string; // New: AI analysis result
+  aiAnalysis?: string;
 }
 
 export interface AlarmLog {
@@ -69,7 +74,7 @@ export interface AlarmLog {
   vehicleId: string;
   unitId: string;
   triggeredAt: string;
-  silencedBy: string; // Employee name or "Manual"
+  silencedBy: string;
   silencedAt: string;
 }
 
@@ -81,5 +86,5 @@ export interface AppState {
   vehicles: Vehicle[];
   justifications: Justification[];
   alarms: AlarmLog[];
-  googleSheetsUrl?: string; // URL do Web App do Google Script
+  googleSheetsUrl?: string;
 }

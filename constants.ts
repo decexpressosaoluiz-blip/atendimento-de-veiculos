@@ -21,6 +21,20 @@ export const INITIAL_USERS: UserAccount[] = [
     password: '123',
     role: 'unit',
     unitId: 'u1'
+  },
+  {
+    id: 'user-u2',
+    username: 'araguaia',
+    password: '123',
+    role: 'unit',
+    unitId: 'u2'
+  },
+  {
+    id: 'user-u3',
+    username: 'santarita',
+    password: '123',
+    role: 'unit',
+    unitId: 'u3'
   }
 ];
 
@@ -40,21 +54,21 @@ export const INITIAL_EMPLOYEES: Employee[] = [
   {
     id: 'e-init-1',
     name: 'Alexandre Carlos',
-    unitId: 'u1', // Vinculado à Matriz
+    unitId: 'u1', 
     active: true,
     workSchedule: { days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex'], startTime: '08:00', endTime: '18:00' }
   },
   {
     id: 'e-init-2',
     name: 'Carlos Silva (Motorista)',
-    unitId: 'u1', // Vinculado à Matriz
+    unitId: 'u1',
     active: true,
     workSchedule: { days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex'], startTime: '08:00', endTime: '18:00' }
   },
   {
     id: 'e-init-3',
     name: 'Roberto Souza (Ajudante)',
-    unitId: 'u1', // Vinculado à Matriz
+    unitId: 'u1',
     active: true,
     workSchedule: { days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex'], startTime: '08:00', endTime: '18:00' }
   }
@@ -73,42 +87,30 @@ export const INITIAL_VEHICLES: Vehicle[] = [
     id: 'v1', 
     number: 'V-1023', 
     route: 'Rota Expressa Matriz', 
-    eta: getTime(today.getHours() - 1, 0), // 1 hour ago (LATE)
-    unitId: 'u1', 
-    status: VehicleStatus.PENDING 
+    stops: [
+      { unitId: 'u3', type: 'ORIGIN', eta: getTime(today.getHours() - 4, 0), status: VehicleStatus.COMPLETED, serviceTimestamp: getTime(today.getHours() - 4, 5) },
+      { unitId: 'u1', type: 'DESTINATION', eta: getTime(today.getHours() - 1, 0), status: VehicleStatus.PENDING } // Late at Matriz
+    ]
   },
   { 
     id: 'v2', 
     number: 'V-4099', 
     route: 'Abastecimento Shopping', 
-    eta: getTime(today.getHours() + 2, 30), // In 2 hours
-    unitId: 'u2', 
-    status: VehicleStatus.PENDING 
+    stops: [
+        { unitId: 'u1', type: 'ORIGIN', eta: getTime(today.getHours() - 1, 0), status: VehicleStatus.COMPLETED, serviceTimestamp: getTime(today.getHours() - 1, 0) },
+        { unitId: 'u2', type: 'DESTINATION', eta: getTime(today.getHours() + 2, 30), status: VehicleStatus.PENDING }
+    ]
   },
   { 
     id: 'v3', 
     number: 'V-2022', 
-    route: 'Transferência Santa Rita', 
-    eta: getTime(today.getHours() - 2, 0), // 2 hours ago (LATE)
-    unitId: 'u3', 
-    status: VehicleStatus.PENDING 
-  },
-  { 
-    id: 'v4', 
-    number: 'V-3301', 
-    route: 'Logística Reversa Cuiabá', 
-    eta: getTime(today.getHours() + 1, 0), 
-    unitId: 'u4', 
-    status: VehicleStatus.PENDING 
-  },
-  { 
-    id: 'v5', 
-    number: 'V-5500', 
-    route: 'Coleta Araguaia', 
-    eta: getTime(today.getHours(), 15), 
-    unitId: 'u2', 
-    status: VehicleStatus.PENDING 
-  },
+    route: 'Transferência Intermediária', 
+    stops: [
+        { unitId: 'u1', type: 'ORIGIN', eta: getTime(today.getHours() - 5, 0), status: VehicleStatus.COMPLETED, serviceTimestamp: getTime(today.getHours() - 5, 10) },
+        { unitId: 'u3', type: 'INTERMEDIATE', eta: getTime(today.getHours() - 2, 0), status: VehicleStatus.PENDING }, // Pending at Santa Rita
+        { unitId: 'u4', type: 'DESTINATION', eta: getTime(today.getHours() + 5, 0), status: VehicleStatus.PENDING }
+    ]
+  }
 ];
 
 export const INITIAL_STATE: AppState = {

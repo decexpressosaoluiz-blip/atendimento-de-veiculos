@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Vehicle } from "../types";
 
@@ -10,7 +11,6 @@ const getAI = () => {
 };
 
 // --- VISION: Analyze Service Photos ---
-// Uses gemini-3-pro-preview as requested for image understanding
 export const analyzeServicePhoto = async (base64Image: string): Promise<{
   isVehicle: boolean;
   qualityScore: number;
@@ -61,7 +61,6 @@ export const analyzeServicePhoto = async (base64Image: string): Promise<{
 };
 
 // --- REASONING: Thinking Mode for Justifications ---
-// Uses gemini-3-pro-preview with max thinking budget (32k)
 export const analyzeJustificationThinking = async (
   vehicleNumber: string,
   route: string,
@@ -103,15 +102,15 @@ export const analyzeJustificationThinking = async (
 };
 
 // --- CHAT: Operational Assistant ---
-// Uses gemini-2.5-flash for fast interactions
 export const createChatSession = (vehicles: Vehicle[], context: string) => {
   const ai = getAI();
   if (!ai) return null;
 
   // Prepare context data about the fleet
-  const vehicleContext = vehicles.map(v => 
-    `- ${v.number} (${v.route}): Status ${v.status}, ETA ${new Date(v.eta).toLocaleTimeString()}`
-  ).join('\n');
+  const vehicleContext = vehicles.map(v => {
+    const stops = v.stops.map(s => `[${s.type}] ${s.unitId}: ${s.status}`).join(' -> ');
+    return `- ${v.number} (${v.route}): ${stops}`;
+  }).join('\n');
 
   return ai.chats.create({
     model: 'gemini-2.5-flash',
@@ -121,7 +120,7 @@ export const createChatSession = (vehicles: Vehicle[], context: string) => {
         Ajude o operador com dúvidas sobre o sistema ou sobre a frota atual.
         Seja conciso, amigável e profissional.
         
-        Dados atuais da frota:
+        Dados atuais das viagens:
         ${vehicleContext}
         
         Contexto do Usuário: ${context}
