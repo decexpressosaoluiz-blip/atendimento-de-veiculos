@@ -1,7 +1,7 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Vehicle, VehicleStatus } from '../types';
-import { Clock, MapPin, AlertTriangle, CheckCircle, FileText, CornerDownRight } from 'lucide-react';
+import { Clock, MapPin, AlertTriangle, CheckCircle, FileText, CornerDownRight, Info, ChevronDown, ChevronUp } from 'lucide-react';
 import { Card } from './Card';
 import { Button } from './Button';
 
@@ -14,6 +14,8 @@ interface VehicleCardProps {
 }
 
 export const VehicleCard: React.FC<VehicleCardProps> = ({ vehicle, currentUnitId, currentTime, onService, onJustify }) => {
+  const [showDetails, setShowDetails] = useState(false);
+
   // Find the stop relevant to the current unit
   const currentStop = vehicle.stops.find(s => s.unitId === currentUnitId);
 
@@ -21,10 +23,17 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({ vehicle, currentUnitId
   if (!currentStop) return null;
 
   const etaDate = new Date(currentStop.eta);
-  const isLate = currentTime > etaDate && currentStop.status === VehicleStatus.PENDING;
+  const isPending = currentStop.status === VehicleStatus.PENDING;
+  const isLate = currentTime > etaDate && isPending;
+  
+  // Calculate Minutes Diff
+  const diffMs = currentTime.getTime() - etaDate.getTime();
+  const diffMinutes = Math.floor(Math.abs(diffMs) / 60000);
+  const diffLabel = diffMs > 0 ? 'atrasado' : 'adiantado';
   
   // Format time
   const timeString = etaDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const dateString = etaDate.toLocaleDateString('pt-BR');
 
   const statusBadge = useMemo(() => {
     if (currentStop.status === VehicleStatus.COMPLETED) {
@@ -40,45 +49,93 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({ vehicle, currentUnitId
   }, [currentStop.status, isLate]);
 
   return (
-    <Card className={`transition-all duration-300 ${isLate ? 'border-l-4 border-l-sle-red shadow-red-100' : 'hover:shadow-elevated'}`}>
-      <div className="flex justify-between items-start mb-4">
+    <Card className={`transition-all duration-300 relative overflow-hidden ${isLate ? 'border-l-4 border-l-sle-red shadow-red-100' : 'hover:shadow-elevated'}`}>
+      {/* Indicador Lateral para Status (Visual rápido) */}
+      <div className={`absolute left-0 top-0 bottom-0 w-1 ${isLate ? 'bg-sle-red' : isPending ? 'bg-sle-blue' : 'bg-green-500'}`}></div>
+
+      <div className="flex justify-between items-start mb-4 pl-2">
         <div>
-          <h3 className="text-2xl font-bold text-sle-navy">{vehicle.number}</h3>
+          <h3 className="text-2xl font-bold text-sle-navy flex items-center gap-2">
+            {vehicle.number}
+            {isLate && diffMinutes > 30 && <span className="flex h-3 w-3 rounded-full bg-red-500 animate-ping" title="Atraso Crítico"></span>}
+          </h3>
           <div className="flex items-center text-slate-500 text-sm mt-1">
             <MapPin className="w-3 h-3 mr-1" />
             {vehicle.route}
           </div>
         </div>
-        {statusBadge}
+        <div className="flex flex-col items-end gap-1">
+           {statusBadge}
+           <button 
+             onClick={() => setShowDetails(!showDetails)} 
+             className="text-xs flex items-center gap-1 text-slate-400 hover:text-sle-blue transition-colors mt-1"
+           >
+             {showDetails ? 'Menos' : 'Detalhes'}
+             {showDetails ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>}
+           </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="bg-slate-50 p-3 rounded-lg">
-          <span className="text-xs text-slate-400 uppercase font-bold">
+      <div className="grid grid-cols-2 gap-4 mb-4 pl-2">
+        <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+          <span className="text-xs text-slate-400 uppercase font-bold block mb-1">
             {currentStop.type === 'ORIGIN' ? 'Saída Prevista' : 'Chegada Prevista'}
           </span>
-          <p className={`text-lg font-semibold ${isLate ? 'text-sle-red' : 'text-sle-blue'}`}>
-            {timeString}
-          </p>
-          <span className="text-[10px] text-slate-400">{etaDate.toLocaleDateString('pt-BR')}</span>
+          <div className="flex items-baseline gap-1">
+            <p className={`text-lg font-semibold leading-none ${isLate ? 'text-sle-red' : 'text-sle-blue'}`}>
+                {timeString}
+            </p>
+            <span className="text-[10px] text-slate-400">{dateString}</span>
+          </div>
         </div>
-        <div className="bg-slate-50 p-3 rounded-lg">
-           <span className="text-xs text-slate-400 uppercase font-bold">Etapa</span>
-           <p className="text-sm font-medium text-slate-700 mt-1 flex items-center gap-1">
-             <CornerDownRight className="w-3 h-3" />
-             {currentStop.type === 'ORIGIN' ? 'Origem' : currentStop.type === 'INTERMEDIATE' ? 'Parada Intermediária' : 'Destino Final'}
+        <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+           <span className="text-xs text-slate-400 uppercase font-bold block mb-1">Etapa Atual</span>
+           <p className="text-sm font-medium text-slate-700 flex items-center gap-1">
+             <CornerDownRight className="w-3 h-3 text-slate-400" />
+             {currentStop.type === 'ORIGIN' ? 'Origem' : currentStop.type === 'INTERMEDIATE' ? 'Parada' : 'Destino'}
            </p>
         </div>
       </div>
 
-      {currentStop.status === VehicleStatus.PENDING && (
-        <div className="flex gap-2">
+      {/* Seção Expansível de Detalhes */}
+      {showDetails && (
+        <div className="mb-4 pl-2 animate-in slide-in-from-top-2 fade-in">
+          <div className="bg-blue-50 rounded-lg p-3 text-sm text-sle-navy border border-blue-100">
+            <div className="flex items-center gap-2 mb-2 font-bold text-sle-blue">
+              <Info className="w-4 h-4" />
+              Status Detalhado
+            </div>
+            <ul className="space-y-1 text-xs sm:text-sm">
+              <li className="flex justify-between">
+                <span>Horário Atual:</span>
+                <span className="font-mono">{currentTime.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}</span>
+              </li>
+              <li className="flex justify-between">
+                <span>Status Cronológico:</span>
+                <span className={`font-bold ${isLate ? 'text-red-600' : 'text-green-600'}`}>
+                  {isPending ? `${diffMinutes} min ${diffLabel}` : 'Concluído'}
+                </span>
+              </li>
+              {currentStop.serviceTimestamp && (
+                <li className="flex justify-between text-slate-500 border-t border-blue-200 pt-1 mt-1">
+                  <span>Atendido em:</span>
+                  <span>{new Date(currentStop.serviceTimestamp).toLocaleString('pt-BR')}</span>
+                </li>
+              )}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {/* Action Buttons */}
+      {isPending && (
+        <div className="flex gap-2 pl-2">
           <Button 
-            className="flex-1" 
+            className="flex-1 shadow-sm" 
             onClick={() => onService(vehicle)}
             icon={<CheckCircle className="w-4 h-4"/>}
           >
-            {currentStop.type === 'ORIGIN' ? 'Confirmar Saída' : 'Confirmar Chegada'}
+            {currentStop.type === 'ORIGIN' ? 'Saída' : 'Chegada'}
           </Button>
           {isLate && (
             <Button 
@@ -94,8 +151,11 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({ vehicle, currentUnitId
       )}
       
       {currentStop.status === VehicleStatus.COMPLETED && (
-        <div className="text-center text-sm text-green-600 font-medium py-2 bg-green-50 rounded-lg border border-green-100">
-          Atendimento registrado às {new Date(currentStop.serviceTimestamp!).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}
+        <div className="pl-2">
+            <div className="text-center text-xs text-green-700 font-bold py-2 bg-green-50 rounded-lg border border-green-100 flex items-center justify-center gap-2">
+            <CheckCircle className="w-3 h-3"/>
+            Processo Finalizado
+            </div>
         </div>
       )}
     </Card>
