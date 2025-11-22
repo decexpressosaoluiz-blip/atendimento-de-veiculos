@@ -1,5 +1,4 @@
 
-
 import React, { useState } from 'react';
 import { UserAccount } from '../types';
 import { Button } from '../components/Button';
@@ -82,6 +81,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, onSyncUrl 
           // User-friendly errors for common mistakes
           if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Erro HTTP')) {
               msg = "FALHA DE PERMISSÃO: Você precisa implantar o script como 'Qualquer Pessoa' (Anyone) no Google.";
+          } else if (msg.includes('Unexpected token')) {
+             msg = "ERRO NA RESPOSTA: O Script retornou HTML (erro) em vez de JSON. Verifique se 'Quem pode acessar' está correto.";
           }
           
           setSyncMessage({ text: msg, type: 'error' });

@@ -176,7 +176,10 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
      if (isLateA && !isLateB) return -1;
      if (!isLateA && isLateB) return 1;
 
-     // 2. Then earliest ETA first (FIFO)
+     // 2. Then earliest ETA first (FIFO - Próximos a chegar)
+     // Se já atrasado, mais atrasado primeiro? Ou mais próximo do prazo?
+     // Geralmente: Atrasados -> Mais recentes para os mais antigos (urgencia)
+     // Futuros -> Mais próximos (urgencia)
      const timeA = new Date(stopA.eta).getTime();
      const timeB = new Date(stopB.eta).getTime();
      return timeA - timeB;
@@ -281,27 +284,51 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
         <div className="flex justify-between items-center mb-4">
             <div className="flex items-center gap-2 overflow-x-auto pb-2 flex-1 hide-scrollbar">
                 <Filter className="w-4 h-4 text-slate-400 mr-1 flex-shrink-0" />
-                {(['pending', 'all', 'late', 'done'] as const).map(f => (
-                    <button 
-                        key={f}
-                        onClick={() => setFilter(f)} 
-                        className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold transition-all duration-200 
-                            ${filter === f 
-                                ? 'bg-sle-navy text-white shadow-lg scale-105' 
-                                : 'bg-white dark:bg-slate-900 text-slate-400 border border-slate-100 dark:border-slate-800 hover:bg-slate-50'}`}
-                    >
-                        {f === 'all' ? 'Todos' : f === 'pending' ? 'Fila (Pendentes)' : f === 'late' ? 'Atrasados' : 'Concluídos'}
-                    </button>
-                ))}
+                <button 
+                    onClick={() => setFilter('pending')} 
+                    className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold transition-all duration-200 
+                        ${filter === 'pending' 
+                            ? 'bg-sle-navy text-white shadow-lg scale-105 ring-2 ring-offset-1 ring-sle-navy' 
+                            : 'bg-white dark:bg-slate-900 text-slate-400 border border-slate-100 dark:border-slate-800 hover:bg-slate-50'}`}
+                >
+                    Fila (Prioridade)
+                </button>
+                <button 
+                    onClick={() => setFilter('all')} 
+                    className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold transition-all duration-200 
+                        ${filter === 'all' 
+                            ? 'bg-sle-navy text-white shadow-lg scale-105' 
+                            : 'bg-white dark:bg-slate-900 text-slate-400 border border-slate-100 dark:border-slate-800 hover:bg-slate-50'}`}
+                >
+                    Todos
+                </button>
+                <button 
+                    onClick={() => setFilter('late')} 
+                    className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold transition-all duration-200 
+                        ${filter === 'late' 
+                            ? 'bg-sle-navy text-white shadow-lg scale-105' 
+                            : 'bg-white dark:bg-slate-900 text-slate-400 border border-slate-100 dark:border-slate-800 hover:bg-slate-50'}`}
+                >
+                    Atrasados
+                </button>
+                 <button 
+                    onClick={() => setFilter('done')} 
+                    className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold transition-all duration-200 
+                        ${filter === 'done' 
+                            ? 'bg-sle-navy text-white shadow-lg scale-105' 
+                            : 'bg-white dark:bg-slate-900 text-slate-400 border border-slate-100 dark:border-slate-800 hover:bg-slate-50'}`}
+                >
+                    Concluídos
+                </button>
             </div>
         </div>
 
         {/* Floating Action Button for Add Trip - HIGHLIGHTED */}
         {onAddVehicle && (
-           <div className="fixed bottom-8 right-6 z-50">
+           <div className="fixed bottom-6 right-6 z-50 animate-in zoom-in duration-300">
               <button 
                   onClick={() => setShowNewTripModal(true)}
-                  className="bg-sle-blue hover:bg-sle-navy text-white w-16 h-16 rounded-full shadow-[0_8px_25px_rgba(46,49,180,0.4)] hover:scale-110 hover:shadow-[0_15px_35px_rgba(46,49,180,0.5)] transition-all duration-300 flex items-center justify-center border-4 border-white/30 active:scale-95"
+                  className="bg-sle-blue hover:bg-sle-navy text-white w-16 h-16 rounded-full shadow-[0_8px_25px_rgba(46,49,180,0.4)] hover:scale-110 hover:shadow-[0_15px_35px_rgba(46,49,180,0.5)] transition-all duration-300 flex items-center justify-center border-4 border-white/30 active:scale-95 ring-4 ring-sle-blue/20"
                   title="Registrar Viagem Extra"
               >
                   <Plus className="w-8 h-8" strokeWidth={2.5} />

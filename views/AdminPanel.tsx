@@ -387,10 +387,11 @@ function doPost(e) {
        sheet.getRange("A1").setValue(JSON.stringify(data.state));
        output.type = "state_saved";
     } else {
+       // LOGICA DE REGISTRO DE FOTOS
        var sheet = ss.getSheetByName("Logs");
        if (!sheet) { 
          sheet = ss.insertSheet("Logs");
-         sheet.appendRow(["Data/Hora", "Veículo", "Rota", "Unidade", "Tipo Parada", "Funcionário", "Status", "Link Foto(s)", "JSON"]);
+         sheet.appendRow(["Data/Hora", "Veículo", "Rota", "Unidade", "Tipo Parada", "Funcionário", "Status", "Links Fotos", "JSON"]);
        }
        
        var photoLinks = [];
@@ -403,8 +404,15 @@ function doPost(e) {
             
             for (var i = 0; i < data.photos.length; i++) {
                var raw = data.photos[i];
-               var cleanBase64 = raw.indexOf('base64,') > -1 ? raw.split('base64,')[1] : raw;
-               var blob = Utilities.newBlob(Utilities.base64Decode(cleanBase64), "image/jpeg", data.vehicle + "_" + i + "_" + new Date().getTime() + ".jpg");
+               var contentType = "image/jpeg";
+               var b64Data = raw;
+               if (raw.indexOf('base64,') > -1) {
+                   var parts = raw.split('base64,');
+                   contentType = parts[0].replace('data:', '').replace(';', '');
+                   b64Data = parts[1];
+               }
+               
+               var blob = Utilities.newBlob(Utilities.base64Decode(b64Data), contentType, data.vehicle + "_" + Date.now() + "_" + i + ".jpg");
                var file = folder.createFile(blob);
                file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
                photoLinks.push(file.getUrl());
@@ -412,7 +420,7 @@ function doPost(e) {
           } catch(err) { photoLinks.push("Erro Foto: " + err.toString()); }
        }
 
-       // Salva todos os links separados por quebra de linha para facilitar o clique
+       // Salva todos os links separados por quebra de linha na mesma célula
        var linksString = photoLinks.join("\\n");
 
        sheet.appendRow([data.timestamp, data.vehicle, data.route, data.unit, data.stopType, data.employee, data.status, linksString, JSON.stringify(data)]);
@@ -908,11 +916,10 @@ function doPost(e) {
                             <HelpCircle className="w-4 h-4"/> Script de Sincronização
                         </h3>
                         <p className="text-xs text-slate-500 mb-2">
-                            Este é o "cérebro" do sistema na nuvem. Se houver erros de conexão, atualize o código lá.
+                            Copie o código abaixo e cole no editor de Script do Google.
                         </p>
-                        <div className="p-3 bg-red-50 text-red-800 text-xs rounded-lg mb-3 border border-red-200 font-bold">
-                           ⚠️ PASSO CRÍTICO: O Script DEVE ser implantado como 'Quem pode acessar: QUALQUER PESSOA'.<br/>
-                           Se estiver como 'Somente eu', o sistema não funcionará.
+                        <div className="p-3 bg-red-50 text-red-800 text-xs rounded-lg mb-3 border border-red-200 font-bold animate-pulse">
+                           ⚠️ CRÍTICO: Na implantação, defina "Quem pode acessar" como "QUALQUER PESSOA" (Anyone). Caso contrário, o app dará erro de conexão.
                         </div>
                         <div className="relative group">
                             <pre className="bg-slate-900 text-slate-50 p-4 rounded-xl text-[10px] font-mono overflow-x-auto whitespace-pre-wrap border border-slate-700 h-64">

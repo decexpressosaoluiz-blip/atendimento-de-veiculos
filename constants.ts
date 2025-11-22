@@ -1,5 +1,4 @@
 
-
 import { Unit, Employee, Vehicle, VehicleStatus, AppState, UserAccount } from './types';
 
 // URL Fixa do Google Apps Script - Forçada via Código e limpa de caracteres ocultos

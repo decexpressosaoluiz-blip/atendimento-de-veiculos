@@ -341,14 +341,9 @@ const App: React.FC = () => {
     }));
 
     // 2. Send to Google Sheets (Log)
-    // We must pull from state carefully, or just use the arguments and lookup
     const vehicle = state.vehicles.find(v => v.id === vehicleId);
     const unit = state.units.find(u => u.id === currentUserUnitId);
     const employee = state.employees.find(e => e.id === employeeId);
-    
-    // We need to find the stop that WAS just updated.
-    // Note: In the previous state (before set above applied fully), the status was PENDING.
-    // We just need to find the stop corresponding to this unit.
     const stop = vehicle?.stops.find(s => s.unitId === currentUserUnitId);
 
     if (vehicle && employee && stop && unit) {
@@ -360,10 +355,9 @@ const App: React.FC = () => {
             stopType: stop.type,
             employee: employee.name,
             status: 'ATENDIDO',
-            photos: photos // Pass raw photos, compression happens in sendToGoogleSheets
+            photos: photos
         };
         
-        // Trigger the send
         sendToGoogleSheets(payload);
     }
   };
