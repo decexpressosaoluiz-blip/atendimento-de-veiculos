@@ -64,6 +64,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     intDate: new Date().toISOString().split('T')[0],
     intTime: '12:00',
 
+    hasDestination: true, // Destination is now optional, defaults to true
     destId: state.units.length > 1 ? state.units[state.units.length - 1].id : '',
     destDate: new Date().toISOString().split('T')[0],
     destTime: '18:00'
@@ -209,12 +210,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
 
     // Build Dest
-    stops.push({
-        unitId: tripForm.destId,
-        type: 'DESTINATION',
-        eta: new Date(`${tripForm.destDate}T${tripForm.destTime}:00`).toISOString(),
-        status: VehicleStatus.PENDING
-    });
+    if (tripForm.hasDestination) {
+        stops.push({
+            unitId: tripForm.destId,
+            type: 'DESTINATION',
+            eta: new Date(`${tripForm.destDate}T${tripForm.destTime}:00`).toISOString(),
+            status: VehicleStatus.PENDING
+        });
+    }
 
     if (editingVehicleId) {
         const original = state.vehicles.find(v => v.id === editingVehicleId);
@@ -229,7 +232,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
     
     // Reset Form
-    setTripForm({ ...tripForm, number: '', route: '', hasIntermediate: false });
+    setTripForm({ ...tripForm, number: '', route: '', hasIntermediate: false, hasDestination: true });
   };
 
   const startEditingTrip = (v: Vehicle) => {
@@ -253,6 +256,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
          intDate: intermediate ? parseDate(intermediate.eta) : '',
          intTime: intermediate ? parseTime(intermediate.eta) : '',
 
+         hasDestination: !!dest,
          destId: dest?.unitId || state.units[0].id,
          destDate: dest ? parseDate(dest.eta) : '',
          destTime: dest ? parseTime(dest.eta) : ''
@@ -446,19 +450,29 @@ function doPost(e) {
                                      </div>
                                  )}
 
+                                 {/* Destination Toggle */}
+                                 <div>
+                                     <label className="flex items-center gap-2 cursor-pointer">
+                                         <input type="checkbox" checked={tripForm.hasDestination} onChange={e => setTripForm({...tripForm, hasDestination: e.target.checked})} />
+                                         <span className="text-sm font-bold text-slate-600 dark:text-slate-300">Definir Destino</span>
+                                     </label>
+                                 </div>
+
                                  {/* Dest */}
-                                 <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
-                                     <span className="text-xs font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded mb-2 inline-block">DESTINO</span>
-                                     <div className="space-y-2">
-                                         <select className={inputClassName} value={tripForm.destId} onChange={e => setTripForm({...tripForm, destId: e.target.value})}>
-                                             {state.units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                                         </select>
-                                         <div className="grid grid-cols-2 gap-2">
-                                             <input type="date" className={inputClassName} value={tripForm.destDate} onChange={e => setTripForm({...tripForm, destDate: e.target.value})} />
-                                             <input type="time" className={inputClassName} value={tripForm.destTime} onChange={e => setTripForm({...tripForm, destTime: e.target.value})} />
+                                 {tripForm.hasDestination && (
+                                     <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700 animate-in slide-in-from-top-2">
+                                         <span className="text-xs font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded mb-2 inline-block">DESTINO</span>
+                                         <div className="space-y-2">
+                                             <select className={inputClassName} value={tripForm.destId} onChange={e => setTripForm({...tripForm, destId: e.target.value})}>
+                                                 {state.units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                                             </select>
+                                             <div className="grid grid-cols-2 gap-2">
+                                                 <input type="date" className={inputClassName} value={tripForm.destDate} onChange={e => setTripForm({...tripForm, destDate: e.target.value})} />
+                                                 <input type="time" className={inputClassName} value={tripForm.destTime} onChange={e => setTripForm({...tripForm, destTime: e.target.value})} />
+                                             </div>
                                          </div>
                                      </div>
-                                 </div>
+                                 )}
 
                                  <Button type="submit" className="w-full" icon={<Save className="w-4 h-4"/>}>Salvar Viagem</Button>
                              </form>
@@ -487,10 +501,20 @@ function doPost(e) {
                                          
                                          <div className="flex items-center gap-2 mt-2 text-sm text-slate-500 dark:text-slate-400">
                                              <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {getUnitName(origin?.unitId)}</span>
-                                             <ArrowRight className="w-3 h-3" />
-                                             {stopsCount > 2 && <span className="bg-slate-100 px-1.5 rounded text-[10px]">MEIO</span>}
-                                             {stopsCount > 2 && <ArrowRight className="w-3 h-3" />}
-                                             <span className="flex items-center gap-1"><Check className="w-3 h-3" /> {getUnitName(dest?.unitId)}</span>
+                                             
+                                             {stopsCount > 2 && (
+                                                <>
+                                                    <ArrowRight className="w-3 h-3" />
+                                                    <span className="bg-slate-100 px-1.5 rounded text-[10px]">MEIO</span>
+                                                </>
+                                             )}
+
+                                             {dest && (
+                                                 <>
+                                                     <ArrowRight className="w-3 h-3" />
+                                                     <span className="flex items-center gap-1"><Check className="w-3 h-3" /> {getUnitName(dest?.unitId)}</span>
+                                                 </>
+                                             )}
                                          </div>
                                      </div>
                                      
