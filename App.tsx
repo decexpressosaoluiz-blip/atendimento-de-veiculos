@@ -71,9 +71,10 @@ const App: React.FC = () => {
             const fetchUrl = `${cleanUrl}${separator}action=read&t=${cacheBuster}`;
 
             // NOTE: Added referrerPolicy 'no-referrer' to bypass some GAS security checks on mobile/iframe
+            // NOTE: Added credentials 'omit' to prevent browser sending cookies which confuses Google Auth when script is set to "Execute as Me"
             const response = await fetch(fetchUrl, {
                 method: 'GET',
-                credentials: 'omit', // CRITICAL: Prevents sending cookies which causes CORS errors with Google Scripts
+                credentials: 'omit', 
                 redirect: 'follow',
                 referrerPolicy: 'no-referrer'
             });
@@ -211,6 +212,7 @@ const App: React.FC = () => {
             mode: 'no-cors', 
             redirect: 'follow',
             referrerPolicy: 'no-referrer',
+            credentials: 'omit', // CRITICAL for Execute As Me
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({ action: 'saveState', state: stateToSave })
           });
@@ -273,6 +275,7 @@ const App: React.FC = () => {
              mode: 'no-cors', 
              redirect: 'follow',
              referrerPolicy: 'no-referrer',
+             credentials: 'omit', // CRITICAL for Execute As Me
              headers: {
                'Content-Type': 'text/plain;charset=utf-8', 
              },
@@ -307,6 +310,7 @@ const App: React.FC = () => {
              mode: 'no-cors', 
              redirect: 'follow',
              referrerPolicy: 'no-referrer',
+             credentials: 'omit', // CRITICAL for Execute As Me
              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
              body: JSON.stringify(payload)
            });

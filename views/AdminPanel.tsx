@@ -304,9 +304,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   4. Clique em "Implantar" (Deploy) > "Nova implantação" (New deployment).
   5. Selecione o tipo "App da Web" (Web app).
   6. Configure:
-     - Executar como: "Eu" (Me)
-     - Quem pode acessar: "Qualquer pessoa" (Anyone)  <--- CRÍTICO!!
-  7. Copie a URL gerada (termina em /exec) e cole no aplicativo.
+     - Executar como: "Eu" (Me) -> IMPORTANTE! O script roda com SUAS permissões.
+     - Quem pode acessar: "Qualquer pessoa" (Anyone) -> IMPORTANTE!
+     
+  POR QUE "EXECUTE AS ME"?
+  O app web é público. Se você colocar "Executar como usuário", cada motorista precisaria
+  logar com Google e ter permissão de edição na sua planilha pessoal. Isso quebraria o app.
+  "Executar como Eu" permite que o script atue como uma API pública segura.
 */
 
 function getDB() {
