@@ -261,6 +261,8 @@ const App: React.FC = () => {
            // Force action property and ensure JSON stringification
            const bodyData = JSON.stringify(processedPayload);
 
+           // NOTE: Using mode: 'cors' with 'text/plain' should work for simple POSTs if script returns proper headers.
+           // Apps Script ContentService generally handles this. 
            await fetch(cleanUrl, {
              method: 'POST',
              mode: 'no-cors', 

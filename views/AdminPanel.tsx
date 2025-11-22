@@ -153,19 +153,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
              // 3. Pending (Check if Late)
              else if (s.status === VehicleStatus.PENDING) {
                  if (new Date() > new Date(s.eta)) {
-                     relevantStops++; // It's late, so it counts against efficiency
+                     relevantStops++; // It's late, so it counts against efficiency (It's a failure)
                      lateStops++;
                      const unitName = state.units.find(u => u.id === s.unitId)?.name || 'Unknown';
                      unitDelays[unitName] = (unitDelays[unitName] || 0) + 1;
                  } else {
-                     pendingOnTime++; // Not counted in relevantStops for Efficiency
+                     pendingOnTime++; // IMPORTANT: Pending (On Time) is NOT counted in relevantStops for Efficiency
                  }
              }
          });
      });
 
      // Efficiency = OnTime / (OnTime + All Late)
-     // Ignoring "Pending On Time" as requested
+     // Ignoring "Pending On Time" as requested ("não deve ser considerado viagem ativa")
      const efficiency = relevantStops > 0 ? Math.round((completedOnTime / relevantStops) * 100) : 100;
      
      const topEmployees = Object.entries(employeeStats)
@@ -320,15 +320,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       showToast("Usuário criado.");
   };
 
-  // --- UPDATED APPS SCRIPT CODE WITH MULTI-PHOTO SUPPORT ---
+  // --- UPDATED APPS SCRIPT CODE WITH CORRECT PHOTO HANDLING ---
   const appsScriptCode = `
 /*
-  ATUALIZAÇÃO DE SCRIPT (FOTOS E BANCO DE DADOS):
+  ATUALIZAÇÃO DE SCRIPT v2.0 (Correção de Fotos e Permissões):
   
   1. Cole este código no script.google.com e Salve.
-  2. Clique em 'doGet' acima e em 'Executar' para dar permissão.
-  3. Clique em "Implantar" (Deploy) > "Nova implantação".
-  4. Selecione "Qualquer pessoa" (Anyone) em "Quem pode acessar".
+  2. IMPORTANTE: Clique em "Implantar" > "Nova implantação".
+  3. Em "Quem pode acessar", selecione "QUALQUER PESSOA" (Anyone).
+  4. Copie a NOVA URL gerada.
 */
 
 function getDB() {
@@ -414,7 +414,7 @@ function doPost(e) {
                
                var blob = Utilities.newBlob(Utilities.base64Decode(b64Data), contentType, data.vehicle + "_" + Date.now() + "_" + i + ".jpg");
                var file = folder.createFile(blob);
-               file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+               file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); // Garante acesso público
                photoLinks.push(file.getUrl());
             }
           } catch(err) { photoLinks.push("Erro Foto: " + err.toString()); }
@@ -533,7 +533,8 @@ function doPost(e) {
                          <div className="flex justify-between items-start">
                              <div>
                                 <div className="text-4xl font-bold">{analytics.efficiency}%</div>
-                                <div className="text-xs uppercase text-slate-400">Eficiência (Prazo)</div>
+                                <div className="text-xs uppercase text-slate-400">Eficiência Global</div>
+                                <div className="text-[10px] text-slate-400 mt-1">(Exclui pendentes no prazo)</div>
                              </div>
                              <TrendingUp className="w-8 h-8 text-green-100" />
                          </div>
@@ -919,7 +920,7 @@ function doPost(e) {
                             Copie o código abaixo e cole no editor de Script do Google.
                         </p>
                         <div className="p-3 bg-red-50 text-red-800 text-xs rounded-lg mb-3 border border-red-200 font-bold animate-pulse">
-                           ⚠️ CRÍTICO: Na implantação, defina "Quem pode acessar" como "QUALQUER PESSOA" (Anyone). Caso contrário, o app dará erro de conexão.
+                           ⚠️ CRÍTICO: ATUALIZE O SCRIPT PARA CORRIGIR O UPLOAD DE FOTOS. APÓS ATUALIZAR, GERE UMA NOVA IMPLANTAÇÃO.
                         </div>
                         <div className="relative group">
                             <pre className="bg-slate-900 text-slate-50 p-4 rounded-xl text-[10px] font-mono overflow-x-auto whitespace-pre-wrap border border-slate-700 h-64">

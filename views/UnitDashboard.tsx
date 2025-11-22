@@ -109,7 +109,7 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
   const [selectedVehicleForService, setSelectedVehicleForService] = useState<Vehicle | null>(null);
   const [selectedVehicleForJustify, setSelectedVehicleForJustify] = useState<Vehicle | null>(null);
   
-  // Filter State - DEFAULT IS 'PENDING'
+  // Filter State - DEFAULT IS 'PENDING' (Fila)
   const [filter, setFilter] = useState<'all' | 'pending' | 'late' | 'done'>('pending');
   const [showNewTripModal, setShowNewTripModal] = useState(false);
   
@@ -177,9 +177,6 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
      if (!isLateA && isLateB) return 1;
 
      // 2. Then earliest ETA first (FIFO - Próximos a chegar)
-     // Se já atrasado, mais atrasado primeiro? Ou mais próximo do prazo?
-     // Geralmente: Atrasados -> Mais recentes para os mais antigos (urgencia)
-     // Futuros -> Mais próximos (urgencia)
      const timeA = new Date(stopA.eta).getTime();
      const timeB = new Date(stopB.eta).getTime();
      return timeA - timeB;
@@ -328,10 +325,11 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
            <div className="fixed bottom-6 right-6 z-50 animate-in zoom-in duration-300">
               <button 
                   onClick={() => setShowNewTripModal(true)}
-                  className="bg-sle-blue hover:bg-sle-navy text-white w-16 h-16 rounded-full shadow-[0_8px_25px_rgba(46,49,180,0.4)] hover:scale-110 hover:shadow-[0_15px_35px_rgba(46,49,180,0.5)] transition-all duration-300 flex items-center justify-center border-4 border-white/30 active:scale-95 ring-4 ring-sle-blue/20"
+                  className="group bg-sle-blue hover:bg-sle-navy text-white w-20 h-20 rounded-full shadow-[0_8px_25px_rgba(46,49,180,0.4)] hover:scale-105 hover:shadow-[0_15px_35px_rgba(46,49,180,0.5)] transition-all duration-300 flex flex-col items-center justify-center border-4 border-white/30 active:scale-95 ring-4 ring-sle-blue/20"
                   title="Registrar Viagem Extra"
               >
-                  <Plus className="w-8 h-8" strokeWidth={2.5} />
+                  <Plus className="w-8 h-8 mb-1 group-hover:-translate-y-1 transition-transform" strokeWidth={3} />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Nova</span>
               </button>
            </div>
         )}
