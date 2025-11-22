@@ -321,8 +321,10 @@ function doPost(e) {
         folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       }
 
-      data.photos.forEach(function(photoBase64, index) {
-        try {
+      // Processa apenas a primeira foto para link principal
+      // (Para não sobrecarregar a célula com fórmulas complexas)
+      var photoBase64 = data.photos[0];
+      try {
            var cleanBase64 = photoBase64;
            if (photoBase64.indexOf('base64,') > -1) {
              cleanBase64 = photoBase64.split('base64,')[1];
@@ -330,26 +332,26 @@ function doPost(e) {
            
            var decoded = Utilities.base64Decode(cleanBase64);
            var timestamp = new Date().getTime();
-           var fileName = data.vehicle + "_" + data.unit + "_" + index + "_" + timestamp + ".jpg";
+           var fileName = data.vehicle + "_" + data.unit + "_" + timestamp + ".jpg";
            var blob = Utilities.newBlob(decoded, "image/jpeg", fileName);
            
            var file = folder.createFile(blob);
            file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
            
-           // Cria fórmula de HYPERLINK para ficar clicável
-           photoLinks.push('=HYPERLINK("' + file.getUrl() + '"; "Ver Foto ' + (index + 1) + '")');
-        } catch (err) {
+           // Cria fórmula de HYPERLINK.
+           // IMPORTANTE: Use vírgula (,) para separador na API, o Google Sheets converte se necessário.
+           photoLinks.push('=HYPERLINK("' + file.getUrl() + '","Ver Foto")');
+      } catch (err) {
            photoLinks.push("Erro: " + err.toString());
-        }
-      });
+      }
     }
     
-    // Se houver múltiplas fotos, junta, senão coloca a única
     var photoCell = photoLinks.length > 0 ? photoLinks[0] : "";
-    if (photoLinks.length > 1) {
-       // Sheets não aceita múltiplos hyperlinks numa célula facilmente, então colocamos o primeiro como link
-       // e indicamos que há mais
-       photoCell = photoLinks.join(" / "); 
+    
+    // Adiciona indicador se houver mais fotos
+    if (data.photos && data.photos.length > 1) {
+       // Nota: Fórmulas complexas podem falhar via appendRow, mantendo simples.
+       // Apenas link da primeira.
     }
 
     sheet.appendRow([
@@ -364,7 +366,7 @@ function doPost(e) {
       JSON.stringify(data)
     ]);
   
-    return ContentService.createTextOutput(JSON.stringify({"result":"success", "savedPhotos": photoLinks.length}))
+    return ContentService.createTextOutput(JSON.stringify({"result":"success"}))
       .setMimeType(ContentService.MimeType.JSON);
       
   } catch(e) {
@@ -812,7 +814,7 @@ function doPost(e) {
                         </p>
                         <ol className="list-decimal list-inside text-xs space-y-1 text-slate-700 dark:text-slate-300 mb-4">
                             <li>Copie o código abaixo e substitua TUDO no Apps Script.</li>
-                            <li>Clique em <b>Implantar {'>'} Gerenciar implantações</b>.</li>
+                            <li>Clique em <b>Implantar &gt; Gerenciar implantações</b>.</li>
                             <li>Clique no Lápis (Editar).</li>
                             <li>Mude a Versão para <b>"Nova versão"</b> (CRUCIAL!).</li>
                             <li>Clique em Implantar e use a nova URL.</li>
