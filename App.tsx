@@ -55,7 +55,7 @@ const App: React.FC = () => {
      // Retry logic - Attempt 3 times with slight backoff
      for (let attempt = 0; attempt < 3; attempt++) {
          try {
-            // Use timestamp for cache busting instead of cache: 'no-store' to be friendlier to proxies/browsers
+            // Use timestamp for cache busting
             const cacheBuster = new Date().getTime();
             
             // Safe URL construction
@@ -74,9 +74,8 @@ const App: React.FC = () => {
             const response = await fetch(fetchUrl, {
                 method: 'GET',
                 mode: 'cors',
-                // Removed 'cache: no-store' to reduce CORS preflight triggers on some networks
+                cache: 'no-store', // IMPORTANT: Forces browser to not cache the GAS redirect
                 redirect: 'follow',
-                credentials: 'omit', // Ensure no cookies interfere with "Anyone" access
                 referrerPolicy: 'no-referrer'
             });
             

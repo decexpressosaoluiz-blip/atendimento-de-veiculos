@@ -303,6 +303,7 @@ function doGet(e) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     if (!ss) {
+       // Fail-safe se não estiver vinculado
        return ContentService.createTextOutput(JSON.stringify({error: "Script must be bound to a spreadsheet."})).setMimeType(ContentService.MimeType.JSON);
     }
     var sheet = ss.getSheetByName("DB_State");
