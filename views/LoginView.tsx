@@ -46,7 +46,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, onSyncUrl 
 
   const handleSyncSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-      // Remove invisible characters, newlines, and ALL spaces
+      // Strict Cleaning: Remove invisible characters, newlines, and ALL spaces
       const cleanUrl = syncUrl.replace(/\s/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '');
 
       if (cleanUrl.length < 10 || !cleanUrl.toLowerCase().startsWith('http')) {
@@ -74,7 +74,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, onSyncUrl 
           let msg = err.message || "Erro desconhecido";
           
           if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
-              msg = "Falha de Conexão. (1) Verifique a internet. (2) O Script DEVE estar publicado como 'Qualquer pessoa' (Anyone).";
+              msg = "Falha de Conexão. O script deve ser 'Execute as: Me' e 'Access: Anyone' (Qualquer Pessoa).";
           }
           
           setSyncMessage({ text: msg, type: 'error' });

@@ -296,19 +296,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // --- UPDATED APPS SCRIPT CODE WITH ROBUST DB HANDLING ---
   const appsScriptCode = `
 /*
-  INSTRUÇÕES IMPORTANTES PARA "FAILED TO FETCH":
-  1. Publique como Web App.
-  2. Executar como: "Eu" (Me).
-  3. Quem pode acessar: "Qualquer pessoa" (Anyone) -> ESSENCIAL!
-  4. DEPOIS DE SALVAR O CÓDIGO, CLIQUE EM 'EXECUTAR' NA FUNÇÃO 'doGet' DENTRO DO EDITOR.
-     Isso forçará o Google a pedir permissão para acessar seu Drive e Planilhas.
-     Sem isso, o script falha silenciosamente e retorna erro de rede.
+  INSTRUÇÕES OBRIGATÓRIAS:
+  1. Cole este código no script.google.com
+  2. Salve o projeto.
+  3. IMPORTANTE: Clique na função 'doGet' na caixa de seleção acima e clique em 'Executar' (Run).
+     >> Isso pedirá as permissões de acesso ao Drive e Planilhas. ACEITE TODAS.
+  4. Clique em "Implantar" (Deploy) > "Nova implantação" (New deployment).
+  5. Selecione o tipo "App da Web" (Web app).
+  6. Configure:
+     - Executar como: "Eu" (Me)
+     - Quem pode acessar: "Qualquer pessoa" (Anyone)  <--- CRÍTICO!!
+  7. Copie a URL gerada (termina em /exec) e cole no aplicativo.
 */
 
 function getDB() {
   var ss;
   try {
-    // Tenta pegar a planilha ativa (funciona se o script estiver vinculado)
+    // Tenta pegar a planilha ativa se o script estiver vinculado
     ss = SpreadsheetApp.getActiveSpreadsheet();
   } catch(e) {}
   
@@ -323,7 +327,7 @@ function getDB() {
         ss = SpreadsheetApp.create(fileName);
       }
     } catch (e) {
-      throw new Error("ERRO PERMISSÃO DRIVE: " + e.toString());
+      throw new Error("ERRO PERMISSÃO DRIVE: Execute a função manualmente uma vez para aceitar permissões.");
     }
   }
   return ss;
@@ -342,7 +346,6 @@ function doGet(e) {
     if (!data || data === "") data = "{}";
     return ContentService.createTextOutput(data).setMimeType(ContentService.MimeType.JSON);
   } catch(e) {
-    // Retorna JSON com erro explicito
     return ContentService.createTextOutput(JSON.stringify({error: e.toString()})).setMimeType(ContentService.MimeType.JSON);
   } finally {
     lock.releaseLock();
@@ -361,6 +364,8 @@ function doPost(e) {
     if (data.action === 'saveState') {
        var sheet = ss.getSheetByName("DB_State");
        if (!sheet) { sheet = ss.insertSheet("DB_State"); sheet.hideSheet(); }
+       // Limpa a célula para garantir que não haja lixo
+       sheet.getRange("A1").setValue("");
        sheet.getRange("A1").setValue(JSON.stringify(data.state));
        output.type = "state_saved";
     } else {
@@ -810,7 +815,7 @@ function doPost(e) {
                                  </div>
                                  {GLOBAL_APPS_SCRIPT_URL && (
                                      <p className="text-[10px] text-green-600 mt-1 ml-1">
-                                         ✓ A URL foi configurada via código para garantir sincronização automática em todos os dispositivos.
+                                         ✓ A URL foi configurada via código.
                                      </p>
                                  )}
                              </div>

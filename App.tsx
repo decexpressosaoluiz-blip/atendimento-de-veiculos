@@ -50,7 +50,7 @@ const App: React.FC = () => {
 
   // Function to fetch data from cloud (Reusable)
   const performCloudSync = async (url: string) => {
-     // Aggressive cleaning for mobile copy-paste artifacts: removes all whitespace and invisible chars
+     // Aggressive cleaning for mobile copy-paste artifacts: removes all whitespace and invisible chars (Zero Width Space, etc)
      let cleanUrl = (url || '').replace(/\s/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '');
      
      if (!cleanUrl) return false;
@@ -70,13 +70,12 @@ const App: React.FC = () => {
             const separator = cleanUrl.includes('?') ? '&' : '?';
             const fetchUrl = `${cleanUrl}${separator}action=read&t=${cacheBuster}`;
 
-            // NOTE: Removed cache: 'no-store' as it sometimes conflicts with CORS redirects in GAS
+            // NOTE: Added referrerPolicy 'no-referrer' to bypass some GAS security checks on mobile/iframe
             const response = await fetch(fetchUrl, {
                 method: 'GET',
                 credentials: 'omit', // CRITICAL: Prevents sending cookies which causes CORS errors with Google Scripts
                 redirect: 'follow',
-                mode: 'cors',
-                referrerPolicy: 'no-referrer' // Improves privacy and avoids some GAS referrer blocks
+                referrerPolicy: 'no-referrer'
             });
             
             if (!response.ok) {
