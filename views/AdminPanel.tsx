@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { AppState, JustificationStatus, Employee, Vehicle, VehicleStatus, UserAccount } from '../types';
 import { Card } from '../components/Card';
@@ -292,81 +291,120 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       showToast("Usuário criado.");
   };
 
-  // --- UPDATED APPS SCRIPT CODE FOR IMAGES ---
+  // --- UPDATED APPS SCRIPT CODE WITH SYNC AND IMAGE LOGGING ---
   const appsScriptCode = `
+// --- SERVER SIDE SCRIPT FOR GOOGLE SHEETS ---
+
+// 1. GET: Serve the saved App State (for syncing devices)
+function doGet(e) {
+  var lock = LockService.getScriptLock();
+  lock.tryLock(10000);
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName("DB_State");
+    
+    var data = "{}";
+    if (sheet) {
+       data = sheet.getRange("A1").getValue();
+    }
+    
+    // If empty or not found, return empty object
+    if (!data || data === "") data = "{}";
+    
+    return ContentService.createTextOutput(data)
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch(e) {
+    return ContentService.createTextOutput(JSON.stringify({error: e.toString()}))
+      .setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// 2. POST: Handle Actions (Save State OR Log Event)
 function doPost(e) {
   var lock = LockService.getScriptLock();
   lock.tryLock(10000);
 
   try {
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-    
-    if (sheet.getLastRow() === 0) {
-      sheet.appendRow(["Data/Hora", "Veículo", "Rota", "Unidade", "Tipo Parada", "Funcionário", "Status", "Foto (Link)", "JSON Dados"]);
-    }
-    
-    var data = JSON.parse(e.postData.contents);
-    var photoLinks = [];
+    var jsonString = e.postData.contents;
+    var data = JSON.parse(jsonString);
+    var output = { result: "success" };
 
-    // --- INTEGRAÇÃO COM GOOGLE DRIVE ---
-    if (data.photos && data.photos.length > 0) {
-      var folderName = "SaoLuizExpress_Fotos";
-      var folders = DriveApp.getFoldersByName(folderName);
-      var folder;
-      
-      if (folders.hasNext()) {
-        folder = folders.next();
-      } else {
-        folder = DriveApp.createFolder(folderName);
-        folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      }
-
-      // Processa apenas a primeira foto para link principal
-      // (Para não sobrecarregar a célula com fórmulas complexas)
-      var photoBase64 = data.photos[0];
-      try {
-           var cleanBase64 = photoBase64;
-           if (photoBase64.indexOf('base64,') > -1) {
-             cleanBase64 = photoBase64.split('base64,')[1];
-           }
-           
-           var decoded = Utilities.base64Decode(cleanBase64);
-           var timestamp = new Date().getTime();
-           var fileName = data.vehicle + "_" + data.unit + "_" + timestamp + ".jpg";
-           var blob = Utilities.newBlob(decoded, "image/jpeg", fileName);
-           
-           var file = folder.createFile(blob);
-           file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-           
-           // Cria fórmula de HYPERLINK.
-           // IMPORTANTE: Use vírgula (,) para separador na API, o Google Sheets converte se necessário.
-           photoLinks.push('=HYPERLINK("' + file.getUrl() + '","Ver Foto")');
-      } catch (err) {
-           photoLinks.push("Erro: " + err.toString());
-      }
-    }
+    // --- ACTION A: SYNC STATE (Save app data to cloud) ---
+    if (data.action === 'saveState') {
+       var ss = SpreadsheetApp.getActiveSpreadsheet();
+       var sheet = ss.getSheetByName("DB_State");
+       if (!sheet) {
+         sheet = ss.insertSheet("DB_State");
+         sheet.hideSheet(); // Hide to not clutter UI
+       }
+       // Save full state JSON to A1
+       sheet.getRange("A1").setValue(JSON.stringify(data.state));
+       output.type = "state_saved";
+    } 
     
-    var photoCell = photoLinks.length > 0 ? photoLinks[0] : "";
+    // --- ACTION B: LOG EVENT (Add row to spreadsheet & Save Photos) ---
+    else {
+        var sheet = ss.getSheetByName("Logs");
+        if (!sheet) {
+           sheet = ss.insertSheet("Logs");
+           sheet.appendRow(["Data/Hora", "Veículo", "Rota", "Unidade", "Tipo Parada", "Funcionário", "Status", "Foto (Link)", "JSON Dados"]);
+        }
+        
+        var photoLinks = [];
+        
+        // SAVE PHOTOS TO DRIVE
+        if (data.photos && data.photos.length > 0) {
+          var folderName = "SaoLuizExpress_Fotos";
+          var folders = DriveApp.getFoldersByName(folderName);
+          var folder;
+          
+          if (folders.hasNext()) {
+            folder = folders.next();
+          } else {
+            folder = DriveApp.createFolder(folderName);
+            folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+          }
     
-    // Adiciona indicador se houver mais fotos
-    if (data.photos && data.photos.length > 1) {
-       // Nota: Fórmulas complexas podem falhar via appendRow, mantendo simples.
-       // Apenas link da primeira.
+          var photoBase64 = data.photos[0]; // Process 1st photo for link
+          try {
+               var cleanBase64 = photoBase64;
+               if (photoBase64.indexOf('base64,') > -1) {
+                 cleanBase64 = photoBase64.split('base64,')[1];
+               }
+               
+               var decoded = Utilities.base64Decode(cleanBase64);
+               var timestamp = new Date().getTime();
+               var fileName = (data.vehicle || "Foto") + "_" + timestamp + ".jpg";
+               var blob = Utilities.newBlob(decoded, "image/jpeg", fileName);
+               
+               var file = folder.createFile(blob);
+               file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+               
+               photoLinks.push('=HYPERLINK("' + file.getUrl() + '","Ver Foto")');
+          } catch (err) {
+               photoLinks.push("Erro Foto: " + err.toString());
+          }
+        }
+        
+        var photoCell = photoLinks.length > 0 ? photoLinks[0] : "";
+    
+        sheet.appendRow([
+          data.timestamp,
+          data.vehicle,
+          data.route,
+          data.unit,
+          data.stopType,
+          data.employee,
+          data.status,
+          photoCell,
+          JSON.stringify(data)
+        ]);
+        output.type = "log_appended";
     }
-
-    sheet.appendRow([
-      data.timestamp,
-      data.vehicle,
-      data.route,
-      data.unit,
-      data.stopType,
-      data.employee,
-      data.status,
-      photoCell,
-      JSON.stringify(data)
-    ]);
   
-    return ContentService.createTextOutput(JSON.stringify({"result":"success"}))
+    return ContentService.createTextOutput(JSON.stringify(output))
       .setMimeType(ContentService.MimeType.JSON);
       
   } catch(e) {
@@ -807,17 +845,18 @@ function doPost(e) {
                  <div className="lg:col-span-6">
                     <Card className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
                         <h3 className="text-sm font-bold uppercase text-slate-500 mb-3 flex items-center gap-2">
-                            <HelpCircle className="w-4 h-4"/> Novo Script Seguro (Obrigatório)
+                            <HelpCircle className="w-4 h-4"/> Script de Sincronização (Atualizado)
                         </h3>
                         <p className="text-xs text-slate-500 mb-2">
-                            Este script cria uma pasta no Drive e salva as fotos, colocando o link clicável na planilha.
+                            Este novo script permite que o App funcione em vários dispositivos simultaneamente (Desktop e Mobile).
                         </p>
                         <ol className="list-decimal list-inside text-xs space-y-1 text-slate-700 dark:text-slate-300 mb-4">
-                            <li>Copie o código abaixo e substitua TUDO no Apps Script.</li>
+                            <li>Copie o código abaixo.</li>
+                            <li>Vá no editor do Apps Script e <b>substitua todo o conteúdo</b>.</li>
                             <li>Clique em <b>Implantar &gt; Gerenciar implantações</b>.</li>
                             <li>Clique no Lápis (Editar).</li>
-                            <li>Mude a Versão para <b>"Nova versão"</b> (CRUCIAL!).</li>
-                            <li>Clique em Implantar e use a nova URL.</li>
+                            <li>Mude a Versão para <b>"Nova versão"</b> (CRUCIAL para funcionar!).</li>
+                            <li>Clique em Implantar.</li>
                         </ol>
                         <div className="relative group">
                             <pre className="bg-slate-900 text-slate-50 p-4 rounded-xl text-[10px] font-mono overflow-x-auto whitespace-pre-wrap border border-slate-700 h-64">

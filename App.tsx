@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppState, VehicleStatus, JustificationStatus, Employee, Vehicle, UserAccount, TripStop } from './types';
 import { INITIAL_STATE } from './constants';
@@ -35,6 +34,10 @@ const compressImage = (base64Str: string, maxWidth = 800, quality = 0.6): Promis
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>(INITIAL_STATE);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Sync State
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'saved' | 'error'>('idle');
+  const isRemoteUpdate = useRef(false); // Prevents echo-loop (save -> load -> save)
 
   // Load State on Mount
   useEffect(() => {
@@ -44,10 +47,98 @@ const App: React.FC = () => {
     document.documentElement.classList.remove('dark');
   }, []);
 
-  // Save State on Change
+  // Cloud Sync: Load from Google Sheets on Startup
   useEffect(() => {
-    if (!isLoading) {
-      saveState(state);
+    const fetchCloudState = async () => {
+      if (!state.googleSheetsUrl || isLoading) return;
+      
+      setSyncStatus('syncing');
+      try {
+        // Append timestamp to avoid caching
+        const response = await fetch(`${state.googleSheetsUrl}?t=${Date.now()}`);
+        if (!response.ok) throw new Error('Network error');
+        
+        const cloudData = await response.json();
+        
+        // Validate if it's a valid state object
+        if (cloudData && cloudData.vehicles && Array.isArray(cloudData.vehicles)) {
+           console.log("Cloud state loaded successfully");
+           isRemoteUpdate.current = true;
+           
+           setState(prev => ({
+             ...prev,
+             ...cloudData, // Overwrite with cloud data
+             currentUser: prev.currentUser, // Preserve local session
+             googleSheetsUrl: prev.googleSheetsUrl // Preserve URL
+           }));
+           
+           setSyncStatus('idle');
+        } else {
+           // If cloud is empty, it might be the first sync
+           setSyncStatus('idle');
+        }
+      } catch (e) {
+        console.error("Failed to load cloud state:", e);
+        // Silent fail on load is ok, user will work locally
+        setSyncStatus('error');
+      }
+    };
+
+    fetchCloudState();
+    
+    // Optional: Polling every 60 seconds to keep devices in sync
+    const pollInterval = setInterval(fetchCloudState, 60000);
+    return () => clearInterval(pollInterval);
+
+  }, [state.googleSheetsUrl, isLoading]);
+
+  // Cloud Sync: Auto-Save to Google Sheets on Change
+  useEffect(() => {
+    if (isLoading || isRemoteUpdate.current) {
+      isRemoteUpdate.current = false;
+      return;
+    }
+    
+    // Save to LocalStorage always
+    saveState(state);
+
+    // Save to Cloud if configured
+    if (state.googleSheetsUrl) {
+      const debouncedSave = setTimeout(async () => {
+        setSyncStatus('syncing');
+        try {
+          // Prepare state for sync
+          const stateToSave = JSON.parse(JSON.stringify(state));
+          delete stateToSave.currentUser; // Don't sync session
+          
+          // IMPORTANT: Strip base64 photos from the state to avoid hitting Google Sheets cell limit (50k chars)
+          // The photos are logged separately via the 'log' action to Drive.
+          if (stateToSave.vehicles) {
+            stateToSave.vehicles.forEach((v: any) => {
+              if (v.stops) {
+                v.stops.forEach((s: any) => {
+                   if (s.servicePhotos) s.servicePhotos = []; // Remove photo content from state sync
+                });
+              }
+            });
+          }
+
+          await fetch(state.googleSheetsUrl!, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: 'saveState', state: stateToSave })
+          });
+          
+          setSyncStatus('saved');
+          setTimeout(() => setSyncStatus('idle'), 3000);
+        } catch (e) {
+          console.error("Cloud save failed", e);
+          setSyncStatus('error');
+        }
+      }, 2000); // 2 seconds debounce
+
+      return () => clearTimeout(debouncedSave);
     }
   }, [state, isLoading]);
 
@@ -80,6 +171,9 @@ const App: React.FC = () => {
                payload.photos = compressedPhotos;
            }
 
+           // Ensure action is 'log' for this payload
+           const finalPayload = { ...payload, action: 'log' };
+
            await fetch(state.googleSheetsUrl, {
              method: 'POST',
              mode: 'no-cors', 
@@ -87,9 +181,9 @@ const App: React.FC = () => {
              headers: {
                'Content-Type': 'text/plain;charset=utf-8', 
              },
-             body: JSON.stringify(payload)
+             body: JSON.stringify(finalPayload)
            });
-           console.log("Enviado para Sheets (Compressão aplicada):", payload.vehicle);
+           console.log("Enviado para Sheets (Log):", payload.vehicle);
       } catch (err) {
           console.error("Falha no envio para Sheets", err);
       }
@@ -99,6 +193,7 @@ const App: React.FC = () => {
       if (!url) return;
       try {
            const payload = { 
+               action: 'log',
                timestamp: new Date().toLocaleString('pt-BR'),
                vehicle: 'TESTE-CONEXAO',
                route: 'SISTEMA',
@@ -117,7 +212,7 @@ const App: React.FC = () => {
              body: JSON.stringify(payload)
            });
            
-           alert("Solicitação enviada! Verifique se uma nova linha apareceu na sua planilha agora.\n\nSe não apareceu:\n1. Vá no Apps Script\n2. Clique em Implantar > Gerenciar Implantações\n3. Crie uma NOVA versão.");
+           alert("Solicitação enviada! Verifique se uma nova linha apareceu na sua planilha.\n\nIMPORTANTE: Para que a sincronização funcione, você DEVE atualizar o Script no Apps Script com a nova versão fornecida no painel.");
       } catch (e) {
            alert("Erro de rede ao tentar enviar: " + e);
       }
@@ -150,7 +245,7 @@ const App: React.FC = () => {
       )
     }));
 
-    // 2. Send to Google Sheets
+    // 2. Send to Google Sheets (Log)
     const vehicle = state.vehicles.find(v => v.id === vehicleId);
     const stop = vehicle?.stops.find(s => s.unitId === currentUserUnitId);
     const employee = state.employees.find(e => e.id === employeeId);
@@ -162,7 +257,7 @@ const App: React.FC = () => {
             vehicle: vehicle.number,
             route: vehicle.route,
             unit: unit.name,
-            stopType: stop.type, // 'ORIGIN', 'INTERMEDIATE', 'DESTINATION'
+            stopType: stop.type,
             employee: employee.name,
             status: 'ATENDIDO',
             photos: photos
@@ -260,7 +355,6 @@ const App: React.FC = () => {
   };
 
   const handleCancelVehicle = (id: string) => {
-    // Soft delete logic: Update status to CANCELLED
     setState(prev => ({ 
         ...prev, 
         vehicles: prev.vehicles.map(v => v.id === id ? { ...v, status: VehicleStatus.CANCELLED } : v)
@@ -268,7 +362,6 @@ const App: React.FC = () => {
   };
 
   const handleDeleteVehicle = (id: string) => {
-    // Hard delete (for administrative cleanup)
     setState(prev => ({
       ...prev,
       vehicles: prev.vehicles.filter(v => v.id !== id),
@@ -305,6 +398,7 @@ const App: React.FC = () => {
             unitName={state.units.find(u => u.id === state.currentUser?.unitId)?.name}
             isAdmin={state.currentUser.role === 'admin'}
             onLogout={handleLogout}
+            syncStatus={state.googleSheetsUrl ? syncStatus : undefined}
           />
           <AIChatWidget state={state} />
         </>
