@@ -50,19 +50,21 @@ const App: React.FC = () => {
 
   // Function to fetch data from cloud (Reusable)
   const performCloudSync = async (url: string) => {
-     const cleanUrl = url.trim();
+     const cleanUrl = url?.trim();
+     if (!cleanUrl) return false;
      
-     // Retry logic - Attempt 3 times
+     // Retry logic - Attempt 3 times with slight backoff
      for (let attempt = 0; attempt < 3; attempt++) {
          try {
-            // Explicitly use GET and follow redirects (Critical for Google Apps Script)
-            // Added 'action' param to ensure uniqueness and avoid aggressive caching
-            const response = await fetch(`${cleanUrl}?action=read&t=${Date.now()}`, {
+            // Using 'no-store' forces the browser to fetch from network, avoiding stale CORS cache.
+            // 'mode: cors' is explicit.
+            const response = await fetch(`${cleanUrl}?action=read`, {
                 method: 'GET',
+                mode: 'cors',
+                cache: 'no-store',
                 redirect: 'follow',
-                headers: {
-                    'Accept': 'application/json'
-                }
+                credentials: 'omit', // Ensure no cookies interfere with "Anyone" access
+                referrerPolicy: 'no-referrer'
             });
             
             if (!response.ok) {
@@ -74,6 +76,7 @@ const App: React.FC = () => {
             // Guard against HTML responses (e.g. Google Sign-in page or Error page)
             // This happens if the script is not deployed as "Anyone"
             if (text.trim().startsWith('<')) {
+                 console.error("Sync received HTML instead of JSON. Likely permission issue.");
                  throw new Error("Invalid response: Received HTML. Check Script Permissions (Must be 'Anyone').");
             }
 
@@ -81,9 +84,8 @@ const App: React.FC = () => {
             try {
                 cloudData = JSON.parse(text);
             } catch (e) {
-                // If empty or invalid JSON, treat as empty state if it's the first run
                 console.warn("JSON Parse warning:", e);
-                // If we received something that isn't JSON but isn't HTML error, it might be empty string
+                // If empty or not JSON, assume empty state if it's valid network response
                 if (!text.trim()) {
                     cloudData = {};
                 } else {
@@ -98,7 +100,6 @@ const App: React.FC = () => {
                
                setState(prev => {
                    // Merge cloud data carefully
-                   // We want to keep the current user session active locally
                    const newState = {
                        ...prev,
                        ...cloudData,
@@ -113,15 +114,13 @@ const App: React.FC = () => {
                return true;
             }
             
-            // If we got here with valid data, success, break loop
             break; 
 
          } catch (e) {
             console.warn(`Sync attempt ${attempt + 1} failed:`, e);
-            // If it's the last attempt, rethrow to notify UI
+            // If it's a "Failed to fetch" (CORS/Network), it usually fails fast.
             if (attempt === 2) throw e; 
-            // Wait before retry (exponential backoff-ish)
-            await new Promise(resolve => setTimeout(resolve, 1500 * (attempt + 1)));
+            await new Promise(resolve => setTimeout(resolve, 2000 * (attempt + 1)));
          }
      }
      return false;
@@ -139,7 +138,6 @@ const App: React.FC = () => {
         setSyncStatus('idle');
       } catch (e) {
         console.error("Sync Error:", e);
-        // We don't block the app, just show error status
         setSyncStatus('error');
       }
     };
@@ -171,12 +169,12 @@ const App: React.FC = () => {
           const stateToSave = JSON.parse(JSON.stringify(state));
           delete stateToSave.currentUser; // Don't sync session
           
-          // IMPORTANT: Strip base64 photos from the state to avoid hitting Google Sheets cell limit (50k chars)
+          // IMPORTANT: Strip base64 photos from the state to avoid hitting Google Sheets cell limit
           if (stateToSave.vehicles) {
             stateToSave.vehicles.forEach((v: any) => {
               if (v.stops) {
                 v.stops.forEach((s: any) => {
-                   if (s.servicePhotos) s.servicePhotos = []; // Remove photo content from state sync
+                   if (s.servicePhotos) s.servicePhotos = [];
                 });
               }
             });
@@ -184,7 +182,8 @@ const App: React.FC = () => {
 
           await fetch(cleanUrl, {
             method: 'POST',
-            mode: 'no-cors', // Allows posting to GAS without CORS preflight issues (opaque response)
+            mode: 'no-cors', 
+            redirect: 'follow',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({ action: 'saveState', state: stateToSave })
           });
@@ -195,7 +194,7 @@ const App: React.FC = () => {
           console.error("Cloud save failed", e);
           setSyncStatus('error');
         }
-      }, 2000); // 2 seconds debounce
+      }, 3000); // Increased debounce to 3s to avoid conflict
 
       return () => clearTimeout(debouncedSave);
     }
