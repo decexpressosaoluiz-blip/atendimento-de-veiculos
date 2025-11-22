@@ -81,8 +81,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, onSyncUrl 
           // User-friendly errors for common mistakes
           if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Erro HTTP')) {
               msg = "FALHA DE PERMISSÃO: Você precisa implantar o script como 'Qualquer Pessoa' (Anyone) no Google. Verifique o tutorial.";
-          } else if (msg.includes('Unexpected token')) {
-             msg = "ERRO NA RESPOSTA: O Script retornou HTML (erro) em vez de JSON. Verifique se 'Quem pode acessar' está correto.";
+          } else if (msg.includes('Unexpected token') || msg.includes('Sign in')) {
+             msg = "ERRO NA RESPOSTA: O Script retornou HTML (Login) em vez de JSON. Configure 'Quem pode acessar' para 'Qualquer pessoa'.";
           }
           
           setSyncMessage({ text: msg, type: 'error' });

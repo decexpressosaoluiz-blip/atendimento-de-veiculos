@@ -12,7 +12,7 @@ import { UnitDashboard } from './views/UnitDashboard';
 import { AdminPanel } from './views/AdminPanel';
 
 // Helper to compress images for smoother upload
-const compressImage = (base64Str: string, maxWidth = 600, quality = 0.5): Promise<string> => {
+const compressImage = (base64Str: string, maxWidth = 600, quality = 0.4): Promise<string> => {
   return new Promise((resolve) => {
     const img = new Image();
     img.src = base64Str;
@@ -251,12 +251,11 @@ const App: React.FC = () => {
 
            if (payload.photos && payload.photos.length > 0) {
                try {
-                  console.log("Compressing photos...");
+                  console.log("Compressing photos for upload...");
                   const compressedPhotos = await Promise.all(
                       payload.photos.map((p: string) => compressImage(p))
                   );
                   processedPayload.photos = compressedPhotos;
-                  console.log("Compression done.");
                } catch(e) {
                   console.error("Photo compression failed, sending raw", e);
                }
@@ -270,11 +269,12 @@ const App: React.FC = () => {
                return;
            }
 
-           console.log("Sending payload to Sheets...");
+           console.log("Sending payload to Sheets (Size: " + (bodyData.length/1024).toFixed(2) + "KB)...");
            
-           // Use normal CORS mode to detect failures
+           // Use cors mode and text/plain to avoid preflight
            const response = await fetch(cleanUrl, {
              method: 'POST',
+             mode: 'cors',
              redirect: 'follow',
              headers: {
                'Content-Type': 'text/plain;charset=utf-8', 
@@ -296,9 +296,12 @@ const App: React.FC = () => {
                    console.log("Success log saved");
                }
            } catch (jsonErr) {
-               // If not JSON, assume success if text is not error-like
-               if (resText.includes('error') || resText.includes('Exception')) {
+               // If not JSON, likely an HTML error page from Google
+               if (resText.trim().startsWith('<') || resText.includes('Google Accounts')) {
                    console.error("Raw Error:", resText);
+                   alert("Erro de Permissão no Google: O script não foi autorizado corretamente ou não foi implantado como 'Qualquer Pessoa'. Verifique a aba Admin.");
+               } else {
+                   console.log("Raw success response");
                }
            }
 
@@ -328,6 +331,7 @@ const App: React.FC = () => {
 
            const response = await fetch(cleanUrl, {
              method: 'POST',
+             mode: 'cors',
              redirect: 'follow',
              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
              body: JSON.stringify(payload)
@@ -339,14 +343,18 @@ const App: React.FC = () => {
            try {
                const json = JSON.parse(text);
                if (json.result === 'success') {
-                   alert("✅ Sucesso! Conexão estabelecida. Uma linha de teste foi criada na planilha.");
+                   if (json.version === '6.0') {
+                       alert("✅ Sucesso Total! Conectado ao Script v6.0.");
+                   } else {
+                       alert("⚠️ Sucesso parcial. Script conectado, mas rodando versão antiga: " + (json.version || 'Desconhecida') + ". ATENÇÃO: Crie uma Nova Versão no Apps Script.");
+                   }
                    saveSyncUrl(cleanUrl);
                } else {
                    alert("⚠️ O Script respondeu, mas houve um erro: " + (json.error || "Desconhecido"));
                }
            } catch (e) {
                console.warn("Resposta não-JSON:", text);
-               if (text.includes('Google Accounts')) {
+               if (text.includes('Google Accounts') || text.includes('Sign in')) {
                    alert("❌ Erro de Permissão: Você precisa republicar o script e selecionar 'Quem pode acessar: Qualquer Pessoa'.");
                } else {
                    alert("✅ Enviado! (Resposta sem JSON). Verifique a planilha.");

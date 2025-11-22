@@ -320,31 +320,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       showToast("Usuário criado.");
   };
 
-  // --- UPDATED APPS SCRIPT CODE WITH CORRECT PHOTO HANDLING ---
+  // --- UPDATED APPS SCRIPT CODE WITH AUTO-HEALING v6.0 ---
   const appsScriptCode = `
 /*
-  VERSÃO 4.0 - SÃO LUIZ EXPRESS (Correção de Upload e Sync)
+  VERSÃO 6.0 - SÃO LUIZ EXPRESS (CORREÇÃO CRÍTICA DE FOTOS)
   
-  INSTRUÇÕES CRÍTICAS:
-  1. Cole este código.
-  2. Selecione "setup" na barra superior e clique em "Executar" para autorizar permissões.
-  3. Clique em "Implantar" > "Gerenciar implantações".
-  4. Clique no ícone de Lápis (Editar).
-  5. Em "Versão", escolha "Nova versão".
-  6. Clique em "Implantar".
-  
-  SE NÃO CRIAR "NOVA VERSÃO", O CÓDIGO NÃO ATUALIZA!
+  ⚠️ IMPORTANTE: 
+  1. Selecione a função 'setup' e clique em Executar para dar permissão.
+  2. Vá em Implantar > Gerenciar > Editar > Nova Versão > Implantar.
 */
 
 function setup() {
-  var ss = getDB();
-  // Garante que a pasta existe e pede permissão ao Drive
+  getDB();
+  ensureFolder();
+  console.log("Configuração Manual Concluída");
+}
+
+function ensureFolder() {
   var folderName = "SaoLuiz_Fotos";
-  var folders = DriveApp.getFoldersByName(folderName);
-  if (!folders.hasNext()) {
-    DriveApp.createFolder(folderName);
+  try {
+    var folders = DriveApp.getFoldersByName(folderName);
+    if (folders.hasNext()) {
+      return folders.next();
+    } else {
+      return DriveApp.createFolder(folderName);
+    }
+  } catch(e) {
+    throw new Error("Erro ao acessar Drive. Verifique se você deu permissão ao script: " + e.toString());
   }
-  console.log("Setup concluído.");
 }
 
 function getDB() {
@@ -353,15 +356,19 @@ function getDB() {
   if (files.hasNext()) {
     return SpreadsheetApp.open(files.next());
   } else {
-    return SpreadsheetApp.create(fileName);
+    var ss = SpreadsheetApp.create(fileName);
+    var sheet = ss.getSheets()[0];
+    sheet.setName("Logs");
+    sheet.appendRow(["Data/Hora", "Veículo", "Rota", "Unidade", "Tipo", "Funcionário", "Status", "Links Fotos", "JSON Raw"]);
+    return ss;
   }
 }
 
 function doGet(e) {
   return ContentService.createTextOutput(JSON.stringify({
     status: "online",
-    version: "4.0",
-    message: "O script está funcionando. Use POST para enviar dados."
+    version: "6.0",
+    check: "Se você vê '6.0', a atualização funcionou."
   })).setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -370,10 +377,16 @@ function doPost(e) {
   lock.tryLock(30000); 
 
   try {
-    var output = { result: "success" };
+    var output = { result: "success", version: "6.0" };
+    
+    if (!e || !e.postData || !e.postData.contents) {
+       throw new Error("Nenhum dado recebido (postData vazio)");
+    }
+
     var jsonString = e.postData.contents;
     var data = JSON.parse(jsonString);
-    var ss = getDB();
+    var ss;
+    try { ss = getDB(); } catch(dbErr) { throw new Error("Erro ao abrir planilha: " + dbErr.toString()); }
     
     if (data.action === 'saveState') {
        var sheet = ss.getSheetByName("DB_State");
@@ -392,9 +405,7 @@ function doPost(e) {
        var photoLinks = [];
        if (data.photos && data.photos.length > 0) {
           try {
-            var folderName = "SaoLuiz_Fotos";
-            var folders = DriveApp.getFoldersByName(folderName);
-            var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+            var folder = ensureFolder();
             
             // Tenta permissão pública (falha silenciosa se não permitido pelo domínio)
             try { folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch(p) {}
@@ -411,31 +422,22 @@ function doPost(e) {
                      b64Data = parts[1];
                  }
                  
-                 var blob = Utilities.newBlob(Utilities.base64Decode(b64Data), contentType, data.vehicle + "_" + Date.now() + "_" + i + ".jpg");
+                 var blob = Utilities.newBlob(Utilities.base64Decode(b64Data), contentType, (data.vehicle || "FOTO") + "_" + Date.now() + "_" + i + ".jpg");
                  var file = folder.createFile(blob);
                  try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch(p) {}
                  photoLinks.push(file.getUrl());
                } catch (errPhoto) {
-                 photoLinks.push("Erro ao salvar img " + i + ": " + errPhoto.toString());
+                 photoLinks.push("Erro IMG: " + errPhoto.toString());
                }
             }
           } catch(errFolder) { 
-             photoLinks.push("Erro Pasta Drive: " + errFolder.toString()); 
+             photoLinks.push("Erro Pasta: " + errFolder.toString()); 
           }
        }
 
        var linksString = photoLinks.join("\\n");
-       
-       // Fallback para dados opcionais
        var r_time = data.timestamp || new Date().toString();
-       var r_veh = data.vehicle || "-";
-       var r_route = data.route || "-";
-       var r_unit = data.unit || "-";
-       var r_type = data.stopType || "-";
-       var r_emp = data.employee || "-";
-       var r_stat = data.status || "-";
-
-       sheet.appendRow([r_time, r_veh, r_route, r_unit, r_type, r_emp, r_stat, linksString, JSON.stringify(data)]);
+       sheet.appendRow([r_time, data.vehicle || "-", data.route || "-", data.unit || "-", data.stopType || "-", data.employee || "-", data.status || "-", linksString, JSON.stringify(data)]);
        output.type = "log_saved";
     }
     
@@ -932,13 +934,16 @@ function doPost(e) {
                  <div className="lg:col-span-6">
                     <Card className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
                         <h3 className="text-sm font-bold uppercase text-slate-500 mb-3 flex items-center gap-2">
-                            <HelpCircle className="w-4 h-4"/> Script de Sincronização
+                            <HelpCircle className="w-4 h-4"/> Script de Sincronização (v6.0)
                         </h3>
                         <p className="text-xs text-slate-500 mb-2">
                             Copie o código abaixo e cole no editor de Script do Google.
                         </p>
                         <div className="p-3 bg-amber-50 text-amber-800 text-xs rounded-lg mb-3 border border-amber-200 font-bold">
-                           🚀 ATENÇÃO: Após colar o código, você DEVE ir em "Implantar" > "Gerenciar" > "Editar" > "Nova Versão". Caso contrário, a atualização não surtirá efeito.
+                           🚀 ATENÇÃO: 
+                           1. Cole o código. 
+                           2. Clique em Executar na função 'setup'. 
+                           3. Vá em Implantar > Gerenciar > Editar > Nova Versão.
                         </div>
                         <div className="relative group">
                             <pre className="bg-slate-900 text-slate-50 p-4 rounded-xl text-[10px] font-mono overflow-x-auto whitespace-pre-wrap border border-slate-700 h-64">
