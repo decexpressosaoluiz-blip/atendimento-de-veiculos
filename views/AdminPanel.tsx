@@ -302,7 +302,7 @@ function doPost(e) {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
     
     if (sheet.getLastRow() === 0) {
-      sheet.appendRow(["Data/Hora", "Veículo", "Rota", "Unidade", "Tipo Parada", "Funcionário", "Status", "Link Fotos", "JSON Dados"]);
+      sheet.appendRow(["Data/Hora", "Veículo", "Rota", "Unidade", "Tipo Parada", "Funcionário", "Status", "Foto (Link)", "JSON Dados"]);
     }
     
     var data = JSON.parse(e.postData.contents);
@@ -323,7 +323,6 @@ function doPost(e) {
 
       data.photos.forEach(function(photoBase64, index) {
         try {
-           // Limpa cabeçalho base64 se existir
            var cleanBase64 = photoBase64;
            if (photoBase64.indexOf('base64,') > -1) {
              cleanBase64 = photoBase64.split('base64,')[1];
@@ -337,14 +336,22 @@ function doPost(e) {
            var file = folder.createFile(blob);
            file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
            
-           // Obtém link de visualização direta
-           photoLinks.push(file.getUrl());
+           // Cria fórmula de HYPERLINK para ficar clicável
+           photoLinks.push('=HYPERLINK("' + file.getUrl() + '"; "Ver Foto ' + (index + 1) + '")');
         } catch (err) {
-           photoLinks.push("Erro ao salvar foto " + index + ": " + err.toString());
+           photoLinks.push("Erro: " + err.toString());
         }
       });
     }
     
+    // Se houver múltiplas fotos, junta, senão coloca a única
+    var photoCell = photoLinks.length > 0 ? photoLinks[0] : "";
+    if (photoLinks.length > 1) {
+       // Sheets não aceita múltiplos hyperlinks numa célula facilmente, então colocamos o primeiro como link
+       // e indicamos que há mais
+       photoCell = photoLinks.join(" / "); 
+    }
+
     sheet.appendRow([
       data.timestamp,
       data.vehicle,
@@ -353,7 +360,7 @@ function doPost(e) {
       data.stopType,
       data.employee,
       data.status,
-      photoLinks.join("\\n"), // Links separados por quebra de linha
+      photoCell,
       JSON.stringify(data)
     ]);
   
@@ -801,11 +808,11 @@ function doPost(e) {
                             <HelpCircle className="w-4 h-4"/> Novo Script Seguro (Obrigatório)
                         </h3>
                         <p className="text-xs text-slate-500 mb-2">
-                            Este script cria uma pasta no Drive e salva as fotos, colocando o link na planilha.
+                            Este script cria uma pasta no Drive e salva as fotos, colocando o link clicável na planilha.
                         </p>
                         <ol className="list-decimal list-inside text-xs space-y-1 text-slate-700 dark:text-slate-300 mb-4">
                             <li>Copie o código abaixo e substitua TUDO no Apps Script.</li>
-                            <li>Clique em <b>Implantar &gt; Gerenciar implantações</b>.</li>
+                            <li>Clique em <b>Implantar {'>'} Gerenciar implantações</b>.</li>
                             <li>Clique no Lápis (Editar).</li>
                             <li>Mude a Versão para <b>"Nova versão"</b> (CRUCIAL!).</li>
                             <li>Clique em Implantar e use a nova URL.</li>
