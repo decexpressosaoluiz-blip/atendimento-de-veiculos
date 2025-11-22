@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppState, VehicleStatus, JustificationStatus, Employee, Vehicle, UserAccount, TripStop } from './types';
 import { INITIAL_STATE } from './constants';
-import { loadState, saveState } from './services/storage';
+import { loadState, saveState, saveSyncUrl, getSyncUrl } from './services/storage';
 import { analyzeJustificationThinking } from './services/geminiService';
 
 import { Header } from './components/Header';
@@ -47,15 +48,10 @@ const App: React.FC = () => {
     document.documentElement.classList.remove('dark');
   }, []);
 
-  // Cloud Sync: Load from Google Sheets on Startup
-  useEffect(() => {
-    const fetchCloudState = async () => {
-      if (!state.googleSheetsUrl || isLoading) return;
-      
-      setSyncStatus('syncing');
-      try {
-        // Append timestamp to avoid caching
-        const response = await fetch(`${state.googleSheetsUrl}?t=${Date.now()}`);
+  // Function to fetch data from cloud (Reusable)
+  const performCloudSync = async (url: string) => {
+     try {
+        const response = await fetch(`${url}?t=${Date.now()}`);
         if (!response.ok) throw new Error('Network error');
         
         const cloudData = await response.json();
@@ -69,27 +65,39 @@ const App: React.FC = () => {
              ...prev,
              ...cloudData, // Overwrite with cloud data
              currentUser: prev.currentUser, // Preserve local session
-             googleSheetsUrl: prev.googleSheetsUrl // Preserve URL
+             googleSheetsUrl: url // Ensure URL is set
            }));
            
-           setSyncStatus('idle');
-        } else {
-           // If cloud is empty, it might be the first sync
-           setSyncStatus('idle');
+           // Save persistent URL
+           saveSyncUrl(url);
+           return true;
         }
-      } catch (e) {
+     } catch (e) {
         console.error("Failed to load cloud state:", e);
-        // Silent fail on load is ok, user will work locally
+        throw e;
+     }
+     return false;
+  };
+
+  // Cloud Sync: Load from Google Sheets on Startup
+  useEffect(() => {
+    const initSync = async () => {
+      const url = getSyncUrl() || state.googleSheetsUrl;
+      if (!url || isLoading) return;
+      
+      setSyncStatus('syncing');
+      try {
+        await performCloudSync(url);
+        setSyncStatus('idle');
+      } catch (e) {
         setSyncStatus('error');
       }
     };
 
-    fetchCloudState();
+    initSync();
     
-    // Optional: Polling every 60 seconds to keep devices in sync
-    const pollInterval = setInterval(fetchCloudState, 60000);
+    const pollInterval = setInterval(initSync, 60000);
     return () => clearInterval(pollInterval);
-
   }, [state.googleSheetsUrl, isLoading]);
 
   // Cloud Sync: Auto-Save to Google Sheets on Change
@@ -103,7 +111,8 @@ const App: React.FC = () => {
     saveState(state);
 
     // Save to Cloud if configured
-    if (state.googleSheetsUrl) {
+    const url = getSyncUrl() || state.googleSheetsUrl;
+    if (url) {
       const debouncedSave = setTimeout(async () => {
         setSyncStatus('syncing');
         try {
@@ -112,7 +121,6 @@ const App: React.FC = () => {
           delete stateToSave.currentUser; // Don't sync session
           
           // IMPORTANT: Strip base64 photos from the state to avoid hitting Google Sheets cell limit (50k chars)
-          // The photos are logged separately via the 'log' action to Drive.
           if (stateToSave.vehicles) {
             stateToSave.vehicles.forEach((v: any) => {
               if (v.stops) {
@@ -123,7 +131,7 @@ const App: React.FC = () => {
             });
           }
 
-          await fetch(state.googleSheetsUrl!, {
+          await fetch(url, {
             method: 'POST',
             mode: 'no-cors',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -147,6 +155,10 @@ const App: React.FC = () => {
     setState(prev => ({ ...prev, currentUser: { role, unitId, username } }));
   };
 
+  const handleManualSync = async (url: string) => {
+      await performCloudSync(url);
+  };
+
   const handleLogout = () => {
     setState(prev => ({ ...prev, currentUser: null }));
   };
@@ -160,7 +172,8 @@ const App: React.FC = () => {
   };
 
   const sendToGoogleSheets = async (payload: any) => {
-      if (!state.googleSheetsUrl) return;
+      const url = getSyncUrl() || state.googleSheetsUrl;
+      if (!url) return;
       
       try {
            // Process Photos Compression if needed
@@ -174,7 +187,7 @@ const App: React.FC = () => {
            // Ensure action is 'log' for this payload
            const finalPayload = { ...payload, action: 'log' };
 
-           await fetch(state.googleSheetsUrl, {
+           await fetch(url, {
              method: 'POST',
              mode: 'no-cors', 
              redirect: 'follow',
@@ -212,7 +225,8 @@ const App: React.FC = () => {
              body: JSON.stringify(payload)
            });
            
-           alert("Solicitação enviada! Verifique se uma nova linha apareceu na sua planilha.\n\nIMPORTANTE: Para que a sincronização funcione, você DEVE atualizar o Script no Apps Script com a nova versão fornecida no painel.");
+           saveSyncUrl(url); // Save it since we tested it
+           alert("Solicitação enviada! Verifique se uma nova linha apareceu na sua planilha.");
       } catch (e) {
            alert("Erro de rede ao tentar enviar: " + e);
       }
@@ -337,6 +351,7 @@ const App: React.FC = () => {
 
   const handleUpdateSettings = (settings: { googleSheetsUrl: string }) => {
     setState(prev => ({ ...prev, googleSheetsUrl: settings.googleSheetsUrl }));
+    saveSyncUrl(settings.googleSheetsUrl);
   };
 
   const handleAddVehicle = (data: { number: string; route: string; stops: TripStop[] }) => {
@@ -345,7 +360,7 @@ const App: React.FC = () => {
       number: data.number,
       route: data.route,
       stops: data.stops,
-      status: VehicleStatus.PENDING // Default status
+      status: VehicleStatus.PENDING
     };
     setState(prev => ({ ...prev, vehicles: [...prev.vehicles, newVehicle] }));
   };
@@ -398,7 +413,7 @@ const App: React.FC = () => {
             unitName={state.units.find(u => u.id === state.currentUser?.unitId)?.name}
             isAdmin={state.currentUser.role === 'admin'}
             onLogout={handleLogout}
-            syncStatus={state.googleSheetsUrl ? syncStatus : undefined}
+            syncStatus={(state.googleSheetsUrl || getSyncUrl()) ? syncStatus : undefined}
           />
           <AIChatWidget state={state} />
         </>
@@ -407,7 +422,7 @@ const App: React.FC = () => {
       <Routes>
         <Route path="/" element={
           !state.currentUser ? (
-            <LoginView users={state.users} onLogin={handleLogin} />
+            <LoginView users={state.users} onLogin={handleLogin} onSyncUrl={handleManualSync} />
           ) : state.currentUser.role === 'admin' ? (
             <Navigate to="/admin" />
           ) : (

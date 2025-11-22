@@ -2,9 +2,23 @@
 import { AppState, VehicleStatus } from '../types';
 import { INITIAL_STATE } from '../constants';
 
-const DATA_KEY = 'sle_app_data_v3'; // Incremented version to reset bad states if needed
+const DATA_KEY = 'sle_app_data_v3';
 const SESSION_KEY = 'sle_user_session_v1';
 const PREFS_KEY = 'sle_user_prefs_v1';
+const SYNC_URL_KEY = 'sle_sync_url_v1'; // New key for persistent cloud connection
+
+// --- Helper for Sync URL ---
+export const saveSyncUrl = (url: string) => {
+  try {
+    localStorage.setItem(SYNC_URL_KEY, url);
+  } catch (e) {
+    console.error("Failed to save sync URL", e);
+  }
+};
+
+export const getSyncUrl = (): string | null => {
+  return localStorage.getItem(SYNC_URL_KEY);
+};
 
 export const loadState = (): AppState => {
   let state = { ...INITIAL_STATE };
@@ -15,36 +29,34 @@ export const loadState = (): AppState => {
     if (serializedData) {
       const data = JSON.parse(serializedData);
       
-      // Critical: If stored data has empty arrays, we assume it's intentional (user deleted them),
-      // UNLESS it's a fresh load where we expect at least some structure.
-      // However, for "persistence", the loaded data must override INITIAL_STATE completely for data arrays.
-      
       if (data.users && data.users.length > 0) state.users = data.users;
-      // If users exists in storage but is empty, we might want to keep initial admin? 
-      // For now, lets trust storage IF it has the 'admin' user.
+      
+      // Restore default admin if missing
       if (data.users && !data.users.find((u: any) => u.username === 'admin')) {
-         // Restore default admin if missing
          state.users = [...data.users, ...INITIAL_STATE.users.filter(u => u.username === 'admin')];
       }
 
       if (data.units) state.units = data.units;
       if (data.employees) state.employees = data.employees;
-      
-      // Vehicles: trust storage completely
       if (data.vehicles) state.vehicles = data.vehicles;
-      
-      // Justifications
       if (data.justifications) state.justifications = data.justifications;
       
-      // Settings
+      // Load stored URL from data, but prefer the specific key if available
       if (data.googleSheetsUrl) state.googleSheetsUrl = data.googleSheetsUrl;
     }
+
+    // 2. Override/Ensure URL from specific storage (Crucial for Mobile Sync)
+    const persistentUrl = getSyncUrl();
+    if (persistentUrl) {
+      state.googleSheetsUrl = persistentUrl;
+    }
+
   } catch (e) {
     console.error("Failed to load main app data", e);
   }
 
   try {
-    // 2. Load Session (Critical: Overwrites any stale user data from main state)
+    // 3. Load Session
     const serializedSession = localStorage.getItem(SESSION_KEY);
     if (serializedSession) {
       const currentUser = JSON.parse(serializedSession);
@@ -59,7 +71,6 @@ export const loadState = (): AppState => {
 
 // --- Storage Cleaning Logic ---
 const cleanOldPhotos = (state: AppState): AppState => {
-  // Finds COMPLETED stops with photos and removes them to save space
   const vehicles = JSON.parse(JSON.stringify(state.vehicles));
   let photoFoundAndRemoved = false;
 
@@ -86,7 +97,7 @@ const cleanOldPhotos = (state: AppState): AppState => {
 };
 
 export const saveState = (state: AppState) => {
-  // 1. Save Session Separately (Small & Critical)
+  // 1. Save Session Separately
   try {
     if (state.currentUser) {
       localStorage.setItem(SESSION_KEY, JSON.stringify(state.currentUser));
@@ -97,8 +108,12 @@ export const saveState = (state: AppState) => {
     console.error("Failed to save session", e);
   }
 
-  // 2. Save Main Data (Heavy)
-  // We save everything EXCEPT currentUser to the main blob
+  // 2. Save Sync URL separately if present
+  if (state.googleSheetsUrl) {
+    saveSyncUrl(state.googleSheetsUrl);
+  }
+
+  // 3. Save Main Data
   const dataToSave = { ...state };
   delete (dataToSave as any).currentUser;
 
@@ -113,7 +128,6 @@ export const saveState = (state: AppState) => {
                return;
            }
            const cleanedState = cleanOldPhotos(data);
-           // If cleaning didn't change anything, stop loop
            if (JSON.stringify(cleanedState) === JSON.stringify(data)) {
                return;
            }
