@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { UserAccount } from '../types';
 import { Button } from '../components/Button';
@@ -78,8 +79,9 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, onSyncUrl 
           console.error("Sync error details:", err);
           let msg = err.message || "Erro desconhecido";
           
-          if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
-              msg = "Falha de Rede/CORS. O Script deve estar como 'Execute as: Me' e 'Anyone'.";
+          // User-friendly errors for common mistakes
+          if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Erro HTTP')) {
+              msg = "FALHA DE PERMISSÃO: Você precisa implantar o script como 'Qualquer Pessoa' (Anyone) no Google.";
           }
           
           setSyncMessage({ text: msg, type: 'error' });
@@ -160,7 +162,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, onSyncUrl 
                 className="text-xs font-bold text-sle-blue flex items-center gap-1.5 hover:underline opacity-70 hover:opacity-100 transition-opacity"
              >
                 <Cloud className="w-3 h-3" /> 
-                {GLOBAL_APPS_SCRIPT_URL ? "Verificar Status da Nuvem" : "Configurar Nuvem (Opcional)"}
+                {GLOBAL_APPS_SCRIPT_URL ? "Verificar Conexão" : "Configurar Nuvem (Opcional)"}
              </button>
           </div>
         </div>
@@ -177,8 +179,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, onSyncUrl 
                   
                   <p className="text-xs text-slate-500 mb-4 leading-relaxed">
                       {GLOBAL_APPS_SCRIPT_URL 
-                        ? "Uma URL de conexão foi detectada no sistema. Clique em sincronizar para testar."
-                        : "Para usar o sistema no celular, cole abaixo a URL do Web App gerada no painel do computador."
+                        ? "A URL de conexão já está configurada no sistema. Clique em 'Verificar' para testar."
+                        : "Cole abaixo a URL do Web App gerada no painel do computador."
                       }
                   </p>
 
@@ -200,7 +202,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, onSyncUrl 
 
                       <div className="flex gap-2">
                           <Button type="button" variant="secondary" className="flex-1" onClick={() => setShowSyncModal(false)}>Cancelar</Button>
-                          <Button type="submit" className="flex-1" isLoading={isSyncing}>Sincronizar</Button>
+                          <Button type="submit" className="flex-1" isLoading={isSyncing}>{GLOBAL_APPS_SCRIPT_URL ? "Verificar" : "Sincronizar"}</Button>
                       </div>
                   </form>
               </div>

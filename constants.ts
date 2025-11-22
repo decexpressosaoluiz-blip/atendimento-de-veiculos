@@ -1,7 +1,8 @@
 
+
 import { Unit, Employee, Vehicle, VehicleStatus, AppState, UserAccount } from './types';
 
-// URL Fixa do Google Apps Script
+// URL Fixa do Google Apps Script - Forçada via Código e limpa de caracteres ocultos
 export const GLOBAL_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxk06K6RNgmxgMO4jYQVByGG7co5G2D5FyTEqWy2ib0c5jFMo1V7MYkfKiskWkNT4TNHw/exec"; 
 
 export const INITIAL_UNITS: Unit[] = [

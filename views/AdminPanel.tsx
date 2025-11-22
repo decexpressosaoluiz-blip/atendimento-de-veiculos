@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { AppState, JustificationStatus, Employee, Vehicle, VehicleStatus, UserAccount } from '../types';
 import { Card } from '../components/Card';
@@ -297,31 +298,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const appsScriptCode = `
 /*
   INSTRUÇÕES OBRIGATÓRIAS:
-  1. Cole este código no script.google.com
-  2. Salve o projeto.
-  3. IMPORTANTE: Clique na função 'doGet' na caixa de seleção acima e clique em 'Executar' (Run).
-     >> Isso pedirá as permissões de acesso ao Drive e Planilhas. ACEITE TODAS.
-  4. Clique em "Implantar" (Deploy) > "Nova implantação" (New deployment).
-  5. Selecione o tipo "App da Web" (Web app).
-  6. Configure:
-     - Executar como: "Eu" (Me) -> IMPORTANTE! O script roda com SUAS permissões.
-     - Quem pode acessar: "Qualquer pessoa" (Anyone) -> IMPORTANTE!
-     
-  POR QUE "EXECUTE AS ME"?
-  O app web é público. Se você colocar "Executar como usuário", cada motorista precisaria
-  logar com Google e ter permissão de edição na sua planilha pessoal. Isso quebraria o app.
-  "Executar como Eu" permite que o script atue como uma API pública segura.
+  1. Cole este código no script.google.com e Salve.
+  2. IMPORTANTE: Clique em 'doGet' acima e em 'Executar' para dar permissão inicial.
+  3. Clique em "Implantar" (Deploy) > "Nova implantação" (New deployment).
+  4. Configure EXATAMENTE assim:
+     - Executar como: "Eu" (Me)
+     - Quem pode acessar: "Qualquer pessoa" (Anyone)
+  
+  * Se não fizer o passo 4 corretamente, ocorrerá erro de "Failed to fetch".
 */
 
 function getDB() {
   var ss;
   try {
-    // Tenta pegar a planilha ativa se o script estiver vinculado
     ss = SpreadsheetApp.getActiveSpreadsheet();
   } catch(e) {}
   
   if (!ss) {
-    // Modo Standalone: Procura arquivo pelo nome ou cria um novo
     try {
       var fileName = "DB_SaoLuiz_System";
       var files = DriveApp.getFilesByName(fileName);
@@ -368,8 +361,6 @@ function doPost(e) {
     if (data.action === 'saveState') {
        var sheet = ss.getSheetByName("DB_State");
        if (!sheet) { sheet = ss.insertSheet("DB_State"); sheet.hideSheet(); }
-       // Limpa a célula para garantir que não haja lixo
-       sheet.getRange("A1").setValue("");
        sheet.getRange("A1").setValue(JSON.stringify(data.state));
        output.type = "state_saved";
     } else {
@@ -386,40 +377,26 @@ function doPost(e) {
             var folders = DriveApp.getFoldersByName(folderName);
             var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
             folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-
             var raw = data.photos[0];
             var cleanBase64 = raw.indexOf('base64,') > -1 ? raw.split('base64,')[1] : raw;
-            
             var blob = Utilities.newBlob(Utilities.base64Decode(cleanBase64), "image/jpeg", data.vehicle + "_" + new Date().getTime() + ".jpg");
             var file = folder.createFile(blob);
             file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
             photoLink = file.getUrl();
-          } catch(err) {
-            photoLink = "Erro Foto: " + err.toString();
-          }
+          } catch(err) { photoLink = "Erro Foto: " + err.toString(); }
        }
 
-       sheet.appendRow([
-          data.timestamp, 
-          data.vehicle, 
-          data.route, 
-          data.unit, 
-          data.stopType, 
-          data.employee, 
-          data.status, 
-          photoLink, 
-          JSON.stringify(data)
-       ]);
+       sheet.appendRow([data.timestamp, data.vehicle, data.route, data.unit, data.stopType, data.employee, data.status, photoLink, JSON.stringify(data)]);
        output.type = "log_saved";
     }
-    
     return ContentService.createTextOutput(JSON.stringify(output)).setMimeType(ContentService.MimeType.JSON);
   } catch(e) {
     return ContentService.createTextOutput(JSON.stringify({"result":"error", "error": e.toString()})).setMimeType(ContentService.MimeType.JSON);
   } finally {
     lock.releaseLock();
   }
-}`.trim();
+}
+`.trim();
 
   const inputClassName = "w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sle-navy dark:text-white p-3.5 focus:ring-2 focus:ring-sle-blue/20 focus:border-sle-blue outline-none transition-all duration-200 shadow-sm text-sm";
   const labelClassName = "block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 ml-1";
@@ -698,6 +675,7 @@ function doPost(e) {
          {/* TEAM TAB */}
          {activeTab === 'team' && (
              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in">
+                 {/* Form */}
                  <div className="lg:col-span-4">
                     <Card className="shadow-lg dark:bg-slate-900">
                         <h3 className="text-xl font-bold mb-4">{editingEmployeeId ? 'Editar Funcionário' : 'Novo Funcionário'}</h3>
@@ -868,12 +846,11 @@ function doPost(e) {
                             <HelpCircle className="w-4 h-4"/> Script de Sincronização
                         </h3>
                         <p className="text-xs text-slate-500 mb-2">
-                            Copie o código abaixo para o seu projeto do Google Apps Script.
+                            Este é o "cérebro" do sistema na nuvem. Se houver erros de conexão, atualize o código lá.
                         </p>
-                        <div className="p-3 bg-yellow-50 text-yellow-800 text-xs rounded-lg mb-3 border border-yellow-200 font-bold">
-                           ⚠️ IMPORTANTE: Publique como Web App (Executar como: EU / Acesso: QUALQUER PESSOA).
-                           <br/>
-                           ⚠️ DEPOIS DE SALVAR, EXECUTE A FUNÇÃO 'doGet' NO EDITOR PARA AUTORIZAR.
+                        <div className="p-3 bg-red-50 text-red-800 text-xs rounded-lg mb-3 border border-red-200 font-bold">
+                           ⚠️ PASSO CRÍTICO: O Script DEVE ser implantado como 'Quem pode acessar: QUALQUER PESSOA'.<br/>
+                           Se estiver como 'Somente eu', o sistema não funcionará.
                         </div>
                         <div className="relative group">
                             <pre className="bg-slate-900 text-slate-50 p-4 rounded-xl text-[10px] font-mono overflow-x-auto whitespace-pre-wrap border border-slate-700 h-64">

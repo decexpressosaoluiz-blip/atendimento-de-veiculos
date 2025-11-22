@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppState, VehicleStatus, JustificationStatus, Employee, Vehicle, UserAccount, TripStop } from './types';
@@ -50,7 +51,7 @@ const App: React.FC = () => {
 
   // Function to fetch data from cloud (Reusable)
   const performCloudSync = async (url: string) => {
-     // Aggressive cleaning for mobile copy-paste artifacts: removes all whitespace and invisible chars (Zero Width Space, etc)
+     // Aggressive cleaning for mobile copy-paste artifacts: removes all whitespace, newlines, and invisible unicode chars
      let cleanUrl = (url || '').replace(/\s/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
      
      if (!cleanUrl) return false;
@@ -70,45 +71,44 @@ const App: React.FC = () => {
             const separator = cleanUrl.includes('?') ? '&' : '?';
             const fetchUrl = `${cleanUrl}${separator}action=read&t=${cacheBuster}`;
 
-            // NOTE: Added referrerPolicy 'no-referrer' to bypass some GAS security checks on mobile/iframe
-            // NOTE: Added credentials 'omit' to prevent browser sending cookies which confuses Google Auth when script is set to "Execute as Me"
-            // NOTE: Added cache 'no-store' to ensure fresh fetch
             const response = await fetch(fetchUrl, {
                 method: 'GET',
-                credentials: 'omit', 
+                mode: 'cors', // Explicitly request CORS
+                credentials: 'omit', // Required for "Execute as Me" scripts to allow public access
                 redirect: 'follow',
-                referrerPolicy: 'no-referrer',
-                cache: 'no-store'
+                referrerPolicy: 'no-referrer', // Fixes mobile CORS block
+                headers: {
+                    'Content-Type': 'text/plain', // Helps bypass some strict MIME checks
+                    'Accept': 'application/json'
+                }
             });
             
             if (!response.ok) {
-                throw new Error(`Network error: ${response.status}`);
+                throw new Error(`Erro HTTP: ${response.status}`);
             }
             
             const text = await response.text();
             
             // Guard against HTML responses (e.g. Google Sign-in page or Error page)
             if (text.trim().startsWith('<')) {
-                 console.warn("Sync received HTML instead of JSON. Likely permission issue.");
-                 // Detect common Google auth page titles
+                 console.warn("Sync received HTML instead of JSON.");
                  if (text.includes('Google Accounts') || text.includes('Sign in')) {
                     throw new Error("Erro de Permissão: O Script deve ser implantado como 'Qualquer Pessoa' (Anyone).");
                  }
-                 if (text.includes('Error')) {
-                     throw new Error("Erro Interno do Script Google. Verifique os logs do Apps Script (View > Executions).");
+                 if (text.includes('script function not found')) {
+                     throw new Error("Erro no Script: Função 'doGet' ausente. Copie o código novamente.");
                  }
-                 throw new Error("Erro no Script: O servidor retornou HTML (erro) ao invés de JSON.");
+                 throw new Error("Erro no Script: O servidor retornou HTML (erro) ao invés de JSON. Verifique se o script foi implantado corretamente.");
             }
 
             let cloudData;
             try {
                 cloudData = JSON.parse(text);
             } catch (e) {
-                console.warn("JSON Parse warning:", e);
                 if (!text.trim()) {
                     cloudData = {};
                 } else {
-                    throw new Error("Invalid JSON format received from server.");
+                    throw new Error("Formato JSON inválido do servidor.");
                 }
             }
 
@@ -119,7 +119,7 @@ const App: React.FC = () => {
             
             // Validate if it's a valid state object or empty
             if (cloudData) {
-               console.log("Cloud state loaded successfully");
+               console.log("Dados carregados com sucesso.");
                isRemoteUpdate.current = true;
                
                setState(prev => {
@@ -141,9 +141,9 @@ const App: React.FC = () => {
             break; 
 
          } catch (e) {
-            console.warn(`Sync attempt ${attempt + 1} failed:`, e);
+            console.warn(`Tentativa ${attempt + 1} falhou:`, e);
             // If it's a specific error we know, throw immediately
-            if (e instanceof Error && (e.message.includes('Erro de Permissão') || e.message.includes('Erro no Script') || e.message.includes('Erro Remoto'))) throw e;
+            if (e instanceof Error && (e.message.includes('Erro') || e.message.includes('Permissão'))) throw e;
             
             if (attempt === 2) throw e; 
             await new Promise(resolve => setTimeout(resolve, 2000 * (attempt + 1)));
@@ -163,7 +163,7 @@ const App: React.FC = () => {
         await performCloudSync(url);
         setSyncStatus('idle');
       } catch (e) {
-        console.error("Sync Error:", e);
+        console.error("Erro Sync:", e);
         setSyncStatus('error');
       }
     };
@@ -214,8 +214,7 @@ const App: React.FC = () => {
             mode: 'no-cors', 
             redirect: 'follow',
             referrerPolicy: 'no-referrer',
-            credentials: 'omit', // CRITICAL for Execute As Me
-            cache: 'no-store',
+            credentials: 'omit', 
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({ action: 'saveState', state: stateToSave })
           });
@@ -223,7 +222,7 @@ const App: React.FC = () => {
           setSyncStatus('saved');
           setTimeout(() => setSyncStatus('idle'), 3000);
         } catch (e) {
-          console.error("Cloud save failed", e);
+          console.error("Falha no salvamento", e);
           setSyncStatus('error');
         }
       }, 3000); // Increased debounce to 3s to avoid conflict
@@ -278,8 +277,7 @@ const App: React.FC = () => {
              mode: 'no-cors', 
              redirect: 'follow',
              referrerPolicy: 'no-referrer',
-             credentials: 'omit', // CRITICAL for Execute As Me
-             cache: 'no-store',
+             credentials: 'omit', 
              headers: {
                'Content-Type': 'text/plain;charset=utf-8', 
              },
@@ -314,8 +312,7 @@ const App: React.FC = () => {
              mode: 'no-cors', 
              redirect: 'follow',
              referrerPolicy: 'no-referrer',
-             credentials: 'omit', // CRITICAL for Execute As Me
-             cache: 'no-store',
+             credentials: 'omit',
              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
              body: JSON.stringify(payload)
            });
