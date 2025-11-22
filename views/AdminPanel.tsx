@@ -320,23 +320,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       showToast("Usuário criado.");
   };
 
-  // --- UPDATED APPS SCRIPT CODE v10.0 ---
+  // --- UPDATED APPS SCRIPT CODE v10.1 ---
   const appsScriptCode = `
 /*
-  VERSÃO 10.0 - CORREÇÃO DA FUNÇÃO SETUP
+  VERSÃO 10.1 - CORREÇÃO FINAL E SETUP
   
-  INSTRUÇÕES:
-  1. Apague TODO o código atual deste arquivo no Google Apps Script.
-  2. Cole este código completo.
-  3. Clique no ícone de Salvar (Disquete).
-  4. Selecione a função 'setup' na barra superior de funções.
-  5. Clique em 'Executar'.
-  6. Autorize as permissões se solicitado (Clique em 'Revisar', escolha conta, clique 'Avançado' > 'Acessar...').
+  INSTRUÇÕES DE INSTALAÇÃO:
+  1. Acesse https://script.google.com/home
+  2. Crie um novo projeto ou abra o existente.
+  3. Apague TODO o código que estiver no arquivo "Código.gs".
+  4. Cole este código abaixo completo.
+  5. Clique no ícone de Salvar (💾).
+  6. Na barra superior, selecione a função 'setup' e clique em 'Executar'.
+     - Se pedir permissão: Revisar Permissões > Escolher Conta > Avançado > Acessar Projeto (Não seguro) > Permitir.
+  7. Após ver "SUCESSO" no log, clique em 'Implantar' > 'Nova Implantação'.
+  8. Em 'Tipo', selecione 'App da Web'.
+  9. Em 'Quem pode acessar', selecione 'Qualquer pessoa' (MUITO IMPORTANTE).
+  10. Clique em 'Implantar', copie a URL e cole no painel do App.
 */
 
 function setup() {
   var result = { status: "iniciado", steps: [] };
-  console.log("🚀 INICIANDO SETUP (V10.0)...");
+  console.log("🚀 INICIANDO SETUP (V10.1)...");
   
   try {
     // 1. Planilha (Database)
@@ -383,7 +388,7 @@ function ensureFolder() {
   
   var folder = DriveApp.createFolder(folderName);
   try {
-    // Tenta deixar público para facilitar visualização (opcional, pode falhar em domains corporativos restritos)
+    // Tenta deixar público para facilitar visualização
     folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   } catch (e) {
     console.log("Aviso: Não foi possível definir permissão pública na pasta (normal em contas corporativas).");
@@ -394,7 +399,7 @@ function ensureFolder() {
 function doGet(e) {
   return ContentService.createTextOutput(JSON.stringify({
     status: "online",
-    version: "10.0",
+    version: "10.1",
     message: "Servidor Operacional.",
     time: new Date().toString()
   })).setMimeType(ContentService.MimeType.JSON);
@@ -402,11 +407,10 @@ function doGet(e) {
 
 function doPost(e) {
   var lock = LockService.getScriptLock();
-  // Aguarda até 30 segundos para evitar conflito de escrita simultânea
-  lock.tryLock(30000);
+  lock.tryLock(30000); // Aguarda até 30s para evitar conflito
 
   try {
-    var output = { result: "success", version: "10.0" };
+    var output = { result: "success", version: "10.1" };
     var jsonString = e.postData.contents;
     var data = JSON.parse(jsonString);
     var ss = getDB();
@@ -432,15 +436,10 @@ function doPost(e) {
           for (var i = 0; i < data.photos.length; i++) {
              try {
                var raw = data.photos[i];
-               // Limpa cabeçalho base64 se existir
                var b64 = raw.indexOf('base64,') > -1 ? raw.split('base64,')[1] : raw;
                var blob = Utilities.newBlob(Utilities.base64Decode(b64), "image/jpeg", "FOTO_" + Date.now() + "_" + i + ".jpg");
                var file = folder.createFile(blob);
-               
-               try { 
-                 file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); 
-               } catch(e){}
-               
+               try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch(e){}
                photoLinks.push(file.getUrl());
              } catch (err) {
                photoLinks.push("Erro Upload: " + err.toString());
@@ -742,7 +741,7 @@ function doPost(e) {
                  </Card>
 
                  <Card className="bg-slate-50 border-dashed border-2 border-slate-300">
-                    <h3 className="font-bold text-slate-600 mb-2 flex items-center gap-2"><Copy className="w-4 h-4"/> Código do Script (v10.0)</h3>
+                    <h3 className="font-bold text-slate-600 mb-2 flex items-center gap-2"><Copy className="w-4 h-4"/> Código do Script (v10.1)</h3>
                     <p className="text-xs text-slate-500 mb-4">Copie este código e cole no editor do Google Apps Script.</p>
                     
                     <div className="relative group">
