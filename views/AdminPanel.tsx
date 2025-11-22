@@ -1,11 +1,10 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { AppState, JustificationStatus, Employee, Vehicle, VehicleStatus, UserAccount } from '../types';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
-import { Check, X, Download, Plus, Truck, Users, Key, Edit, Save, Trash2, Link, Map, ArrowRight, MapPin, Upload, Copy, HelpCircle, FileJson, Zap, Lightbulb, TrendingUp, AlertTriangle, Lock } from 'lucide-react';
+import { Check, X, Download, Plus, Truck, Users, Key, Edit, Save, Trash2, Link, Map, ArrowRight, MapPin, Upload, Copy, HelpCircle, FileJson, Zap, Lightbulb, TrendingUp, AlertTriangle, Lock, Calendar, Filter } from 'lucide-react';
 import { GLOBAL_APPS_SCRIPT_URL } from '../constants';
 
 interface AdminPanelProps {
@@ -45,6 +44,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'fleet' | 'team' | 'access' | 'settings'>('dashboard');
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+
+  // --- FILTERS ---
+  const [filterUnit, setFilterUnit] = useState<string>('all');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
 
   // --- DELETE MODAL STATE ---
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'vehicle' | 'employee' | 'user', id: string } | null>(null);
@@ -112,51 +116,72 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
      const activeVehicles = state.vehicles.filter(v => v.status !== VehicleStatus.CANCELLED);
      const totalTrips = activeVehicles.length;
      
-     let totalStops = 0;
-     let completedStops = 0;
+     let relevantStops = 0; // Stops that contribute to efficiency (Completed + Late)
+     let completedOnTime = 0;
      let lateStops = 0;
+     let pendingOnTime = 0;
      
      const employeeStats: Record<string, number> = {};
      const unitDelays: Record<string, number> = {};
      
      activeVehicles.forEach(v => {
          v.stops.forEach(s => {
-             totalStops++;
+             // FILTER LOGIC
+             if (filterUnit !== 'all' && s.unitId !== filterUnit) return;
+             
+             const dateRef = new Date(s.eta);
+             if (startDate && dateRef < new Date(startDate + "T00:00:00")) return;
+             if (endDate && dateRef > new Date(endDate + "T23:59:59")) return;
+
+             // METRICS LOGIC
+             // 1. Completed (On Time)
              if (s.status === VehicleStatus.COMPLETED) {
-                 completedStops++;
+                 relevantStops++;
+                 completedOnTime++;
                  if (s.servicedByEmployeeId) {
                      const name = state.employees.find(e => e.id === s.servicedByEmployeeId)?.name || 'Unknown';
                      employeeStats[name] = (employeeStats[name] || 0) + 1;
                  }
              }
-             
-             // Check latency (Past pending or Late justified)
-             const isLate = (s.status === VehicleStatus.PENDING && new Date() > new Date(s.eta)) || 
-                            s.status === VehicleStatus.LATE_JUSTIFIED;
-             if (isLate) {
+             // 2. Late (Justified or Just Plain Late)
+             else if (s.status === VehicleStatus.LATE_JUSTIFIED || s.status === VehicleStatus.LATE_NOT_JUSTIFIED) {
+                 relevantStops++;
                  lateStops++;
                  const unitName = state.units.find(u => u.id === s.unitId)?.name || 'Unknown';
                  unitDelays[unitName] = (unitDelays[unitName] || 0) + 1;
              }
+             // 3. Pending (Check if Late)
+             else if (s.status === VehicleStatus.PENDING) {
+                 if (new Date() > new Date(s.eta)) {
+                     relevantStops++; // It's late, so it counts against efficiency
+                     lateStops++;
+                     const unitName = state.units.find(u => u.id === s.unitId)?.name || 'Unknown';
+                     unitDelays[unitName] = (unitDelays[unitName] || 0) + 1;
+                 } else {
+                     pendingOnTime++; // Not counted in relevantStops for Efficiency
+                 }
+             }
          });
      });
 
-     const efficiency = totalStops > 0 ? Math.round((completedStops / totalStops) * 100) : 0;
+     // Efficiency = OnTime / (OnTime + All Late)
+     const efficiency = relevantStops > 0 ? Math.round((completedOnTime / relevantStops) * 100) : 100;
+     
      const topEmployees = Object.entries(employeeStats)
         .map(([name, count]) => ({ name, count }))
         .sort((a,b) => b.count - a.count)
         .slice(0, 5);
 
      const chartDataStatus = [
-        { name: 'No Prazo', value: completedStops, color: '#10B981' }, // emerald-500
-        { name: 'Atrasos', value: lateStops, color: '#EF4444' },       // red-500
-        { name: 'Pendentes', value: totalStops - completedStops - lateStops, color: '#3B82F6' } // blue-500
+        { name: 'Atendidos (Prazo)', value: completedOnTime, color: '#10B981' }, // emerald-500
+        { name: 'Atrasos / Pendência Crítica', value: lateStops, color: '#EF4444' }, // red-500
+        { name: 'Aguardando (Prazo)', value: pendingOnTime, color: '#3B82F6' } // blue-500
      ];
 
      // Suggestions
      const suggestions = [];
-     if (lateStops > completedStops * 0.2) suggestions.push("Alto índice de atrasos. Considere rever os tempos estimados das rotas.");
-     if (efficiency < 50 && totalTrips > 0) suggestions.push("Eficiência abaixo de 50%. Verifique se os motoristas estão registrando as paradas corretamente.");
+     if (lateStops > relevantStops * 0.2) suggestions.push("Alto índice de atrasos. Considere rever os tempos estimados das rotas.");
+     if (efficiency < 50 && relevantStops > 0) suggestions.push("Eficiência abaixo de 50%. Verifique se os motoristas estão registrando as paradas corretamente.");
      if (topEmployees.length > 0 && topEmployees[0].count > topEmployees[1]?.count * 2) suggestions.push(`${topEmployees[0].name} está sobrecarregado comparado aos outros.`);
 
      return { totalTrips, efficiency, topEmployees, chartDataStatus, unitDelays, suggestions };
@@ -448,13 +473,46 @@ function doPost(e) {
          {/* DASHBOARD TAB */}
          {activeTab === 'dashboard' && (
              <div className="space-y-6 animate-in fade-in">
+                 {/* FILTERS */}
+                 <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col md:flex-row gap-4 items-end">
+                     <div className="w-full md:w-1/3">
+                         <label className={labelClassName}>Filtrar Unidade</label>
+                         <div className="relative">
+                             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"/>
+                             <select className={`${inputClassName} pl-10`} value={filterUnit} onChange={(e) => setFilterUnit(e.target.value)}>
+                                 <option value="all">Todas as Unidades</option>
+                                 {state.units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                             </select>
+                         </div>
+                     </div>
+                     <div className="w-full md:w-1/3">
+                         <label className={labelClassName}>Data Inicial</label>
+                         <div className="relative">
+                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"/>
+                            <input type="date" className={`${inputClassName} pl-10`} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                         </div>
+                     </div>
+                     <div className="w-full md:w-1/3">
+                         <label className={labelClassName}>Data Final</label>
+                         <div className="relative">
+                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"/>
+                            <input type="date" className={`${inputClassName} pl-10`} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                         </div>
+                     </div>
+                     {(startDate || endDate || filterUnit !== 'all') && (
+                         <button onClick={() => { setStartDate(''); setEndDate(''); setFilterUnit('all'); }} className="text-xs text-red-500 hover:underline mb-4 md:mb-0">
+                             Limpar
+                         </button>
+                     )}
+                 </div>
+
                  {/* KPIs */}
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                      <Card className="border-l-4 border-l-sle-blue dark:bg-slate-900">
                          <div className="flex justify-between items-start">
                              <div>
                                 <div className="text-4xl font-bold">{analytics.totalTrips}</div>
-                                <div className="text-xs uppercase text-slate-400">Viagens Ativas</div>
+                                <div className="text-xs uppercase text-slate-400">Viagens Cadastradas</div>
                              </div>
                              <Truck className="w-8 h-8 text-slate-200" />
                          </div>
@@ -463,7 +521,7 @@ function doPost(e) {
                          <div className="flex justify-between items-start">
                              <div>
                                 <div className="text-4xl font-bold">{analytics.efficiency}%</div>
-                                <div className="text-xs uppercase text-slate-400">Eficiência Global</div>
+                                <div className="text-xs uppercase text-slate-400">Eficiência (Prazo)</div>
                              </div>
                              <TrendingUp className="w-8 h-8 text-green-100" />
                          </div>
@@ -471,8 +529,8 @@ function doPost(e) {
                      <Card className="border-l-4 border-l-red-500 dark:bg-slate-900">
                          <div className="flex justify-between items-start">
                              <div>
-                                <div className="text-4xl font-bold text-red-500">{analytics.chartDataStatus.find(x=>x.name === 'Atrasos')?.value || 0}</div>
-                                <div className="text-xs uppercase text-slate-400">Atrasos Registrados</div>
+                                <div className="text-4xl font-bold text-red-500">{analytics.chartDataStatus.find(x=>x.name.includes('Atrasos'))?.value || 0}</div>
+                                <div className="text-xs uppercase text-slate-400">Ocorrências de Atraso</div>
                              </div>
                              <AlertTriangle className="w-8 h-8 text-red-100" />
                          </div>

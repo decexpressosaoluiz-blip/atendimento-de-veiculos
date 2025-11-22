@@ -109,8 +109,8 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
   const [selectedVehicleForService, setSelectedVehicleForService] = useState<Vehicle | null>(null);
   const [selectedVehicleForJustify, setSelectedVehicleForJustify] = useState<Vehicle | null>(null);
   
-  // Filter State
-  const [filter, setFilter] = useState<'all' | 'pending' | 'late' | 'done'>('all');
+  // Filter State - DEFAULT CHANGED TO 'PENDING'
+  const [filter, setFilter] = useState<'all' | 'pending' | 'late' | 'done'>('pending');
   const [showNewTripModal, setShowNewTripModal] = useState(false);
   
   // Local state for silenced alarms (session based)
@@ -127,11 +127,6 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
   const getStop = (v: Vehicle) => v.stops.find(s => s.unitId === currentUnitId);
 
   // --- CORE FILTERING LOGIC ---
-  // Rules:
-  // 1. Show ALL vehicles scheduled for TODAY (Completed or Pending)
-  // 2. Show vehicles from PAST only if PENDING (Backlog)
-  // 3. Hide vehicles from FUTURE
-  // 4. Hide vehicles from PAST if COMPLETED
   const visibleVehicles = state.vehicles.filter(v => {
       if (v.status === VehicleStatus.CANCELLED) return false;
       
@@ -147,7 +142,6 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
 
       const isToday = stopDay === today;
       const isPast = stopDay < today;
-      // const isFuture = stopDay > today;
 
       if (isToday) return true; // Rule 1: Show everything from today
       if (isPast && stop.status === VehicleStatus.PENDING) return true; // Rule 2: Show backlog
@@ -155,7 +149,7 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
       return false; // Hide everything else
   });
 
-  // --- SECONDARY FILTERING (BUTTONS) ---
+  // --- SECONDARY FILTERING (BUTTONS) & SORTING ---
   const filteredVehicles = visibleVehicles.filter(v => {
     const stop = getStop(v);
     if (!stop) return false;
@@ -173,8 +167,13 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
      const stopA = getStop(a);
      const stopB = getStop(b);
      if (!stopA || !stopB) return 0;
-     // Sort by time
-     return new Date(stopA.eta).getTime() - new Date(stopB.eta).getTime();
+     
+     // Sorting Logic:
+     // 1. Late vehicles first
+     // 2. Earliest ETA first
+     const timeA = new Date(stopA.eta).getTime();
+     const timeB = new Date(stopB.eta).getTime();
+     return timeA - timeB;
   });
 
   // --- ALARM LOGIC ---
@@ -198,7 +197,7 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
       }
   };
 
-  // Stats for Cards (Based on Visible Vehicles)
+  // Stats for Cards
   const pendingCount = visibleVehicles.filter(v => getStop(v)?.status === VehicleStatus.PENDING).length;
   const lateCount = visibleVehicles.filter(v => {
       const s = getStop(v);
@@ -255,11 +254,11 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
         </div>
 
         <div className="flex gap-3 overflow-x-auto pb-2 hide-scrollbar container mx-auto max-w-2xl">
-          <div onClick={() => setFilter('all')}>
-             <StatCard label="Agenda Dia" value={visibleVehicles.length} color="purple" icon={<AlertOctagon className="w-5 h-5" />} isActive={filter === 'all'} />
-          </div>
           <div onClick={() => setFilter('pending')}>
              <StatCard label="Pendentes" value={pendingCount} color="blue" icon={<Zap className="w-5 h-5" />} isActive={filter === 'pending'} />
+          </div>
+          <div onClick={() => setFilter('all')}>
+             <StatCard label="Agenda Dia" value={visibleVehicles.length} color="purple" icon={<AlertOctagon className="w-5 h-5" />} isActive={filter === 'all'} />
           </div>
           <div onClick={() => setFilter('late')}>
              <StatCard label="Atrasados" value={lateCount} color="red" icon={<AlertTriangle className="w-5 h-5" />} isActive={filter === 'late'} />
@@ -276,7 +275,7 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
         <div className="flex justify-between items-center mb-4">
             <div className="flex items-center gap-2 overflow-x-auto pb-2 flex-1 hide-scrollbar">
                 <Filter className="w-4 h-4 text-slate-400 mr-1 flex-shrink-0" />
-                {(['all', 'pending', 'late', 'done'] as const).map(f => (
+                {(['pending', 'all', 'late', 'done'] as const).map(f => (
                     <button 
                         key={f}
                         onClick={() => setFilter(f)} 
@@ -285,21 +284,21 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
                                 ? 'bg-sle-navy text-white shadow-lg scale-105' 
                                 : 'bg-white dark:bg-slate-900 text-slate-400 border border-slate-100 dark:border-slate-800 hover:bg-slate-50'}`}
                     >
-                        {f === 'all' ? 'Todos' : f === 'pending' ? 'Pendentes' : f === 'late' ? 'Atrasados' : 'Concluídos'}
+                        {f === 'all' ? 'Todos' : f === 'pending' ? 'Pendentes (Fila)' : f === 'late' ? 'Atrasados' : 'Concluídos'}
                     </button>
                 ))}
             </div>
         </div>
 
-        {/* Floating Action Button for Add Trip */}
+        {/* Floating Action Button for Add Trip - HIGHLIGHTED */}
         {onAddVehicle && (
            <div className="fixed bottom-6 right-6 z-50">
               <button 
                   onClick={() => setShowNewTripModal(true)}
-                  className="bg-sle-blue hover:bg-sle-navy text-white p-4 rounded-full shadow-2xl shadow-sle-blue/40 hover:scale-110 transition-all flex items-center gap-2"
+                  className="bg-sle-blue hover:bg-sle-navy text-white w-16 h-16 rounded-full shadow-[0_0_20px_rgba(46,49,180,0.4)] hover:scale-110 hover:shadow-[0_0_30px_rgba(46,49,180,0.6)] transition-all flex items-center justify-center animate-bounce-slow border-4 border-white/20"
                   title="Registrar Viagem Extra"
               >
-                  <Plus className="w-6 h-6" />
+                  <Plus className="w-8 h-8" />
               </button>
            </div>
         )}
@@ -312,7 +311,7 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
                 <CheckCircle2 className="w-12 h-12" />
               </div>
               <p className="font-bold text-lg">Nenhum veículo neste filtro.</p>
-              <p className="text-sm text-slate-400">Visualizando apenas hoje + pendências antigas.</p>
+              <p className="text-sm text-slate-400">Tudo certo por aqui.</p>
             </div>
           ) : (
             filteredVehicles.map((vehicle, index) => (

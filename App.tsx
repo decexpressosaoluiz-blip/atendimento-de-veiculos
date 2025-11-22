@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppState, VehicleStatus, JustificationStatus, Employee, Vehicle, UserAccount, TripStop } from './types';
@@ -8,7 +7,6 @@ import { loadState, saveState, saveSyncUrl, getSyncUrl } from './services/storag
 import { analyzeJustificationThinking } from './services/geminiService';
 
 import { Header } from './components/Header';
-import { AIChatWidget } from './components/AIChatWidget';
 import { LoginView } from './views/LoginView';
 import { UnitDashboard } from './views/UnitDashboard';
 import { AdminPanel } from './views/AdminPanel';
@@ -51,17 +49,17 @@ const App: React.FC = () => {
 
   // Function to fetch data from cloud (Reusable)
   const performCloudSync = async (url: string) => {
-     // Aggressive cleaning for mobile copy-paste artifacts: removes all whitespace, newlines, and invisible unicode chars
+     // Aggressive cleaning for mobile copy-paste artifacts
      let cleanUrl = (url || '').replace(/\s/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
      
      if (!cleanUrl) return false;
 
-     // Auto-fix common URL mistake: copying the editor link instead of the exec link
+     // Auto-fix common URL mistake
      if (cleanUrl.includes('/edit')) {
          cleanUrl = cleanUrl.replace(/\/edit.*/, '/exec');
      }
      
-     // Retry logic - Attempt 3 times with slight backoff
+     // Retry logic - Attempt 3 times
      for (let attempt = 0; attempt < 3; attempt++) {
          try {
             // Use timestamp for cache busting
@@ -73,12 +71,12 @@ const App: React.FC = () => {
 
             const response = await fetch(fetchUrl, {
                 method: 'GET',
-                mode: 'cors', // Explicitly request CORS
-                credentials: 'omit', // Required for "Execute as Me" scripts to allow public access
+                mode: 'cors',
+                credentials: 'omit',
                 redirect: 'follow',
-                referrerPolicy: 'no-referrer', // Fixes mobile CORS block
+                referrerPolicy: 'no-referrer',
                 headers: {
-                    'Content-Type': 'text/plain', // Helps bypass some strict MIME checks
+                    'Content-Type': 'text/plain',
                     'Accept': 'application/json'
                 }
             });
@@ -89,16 +87,13 @@ const App: React.FC = () => {
             
             const text = await response.text();
             
-            // Guard against HTML responses (e.g. Google Sign-in page or Error page)
+            // Guard against HTML responses
             if (text.trim().startsWith('<')) {
                  console.warn("Sync received HTML instead of JSON.");
                  if (text.includes('Google Accounts') || text.includes('Sign in')) {
                     throw new Error("Erro de Permissão: O Script deve ser implantado como 'Qualquer Pessoa' (Anyone).");
                  }
-                 if (text.includes('script function not found')) {
-                     throw new Error("Erro no Script: Função 'doGet' ausente. Copie o código novamente.");
-                 }
-                 throw new Error("Erro no Script: O servidor retornou HTML (erro) ao invés de JSON. Verifique se o script foi implantado corretamente.");
+                 throw new Error("Erro no Script: O servidor retornou HTML ao invés de JSON.");
             }
 
             let cloudData;
@@ -112,18 +107,15 @@ const App: React.FC = () => {
                 }
             }
 
-            // Check for explicit error from script
             if (cloudData && cloudData.error) {
                 throw new Error("Erro Remoto: " + cloudData.error);
             }
             
-            // Validate if it's a valid state object or empty
             if (cloudData) {
                console.log("Dados carregados com sucesso.");
                isRemoteUpdate.current = true;
                
                setState(prev => {
-                   // Merge cloud data carefully
                    const newState = {
                        ...prev,
                        ...cloudData,
@@ -133,7 +125,6 @@ const App: React.FC = () => {
                    return newState;
                });
                
-               // Save persistent URL
                saveSyncUrl(cleanUrl);
                return true;
             }
@@ -142,9 +133,7 @@ const App: React.FC = () => {
 
          } catch (e) {
             console.warn(`Tentativa ${attempt + 1} falhou:`, e);
-            // If it's a specific error we know, throw immediately
             if (e instanceof Error && (e.message.includes('Erro') || e.message.includes('Permissão'))) throw e;
-            
             if (attempt === 2) throw e; 
             await new Promise(resolve => setTimeout(resolve, 2000 * (attempt + 1)));
          }
@@ -181,10 +170,8 @@ const App: React.FC = () => {
       return;
     }
     
-    // Save to LocalStorage always
     saveState(state);
 
-    // Save to Cloud if configured
     const url = getSyncUrl() || state.googleSheetsUrl;
     if (url) {
       const debouncedSave = setTimeout(async () => {
@@ -193,11 +180,9 @@ const App: React.FC = () => {
           let cleanUrl = url.replace(/\s/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
           if (cleanUrl.includes('/edit')) cleanUrl = cleanUrl.replace(/\/edit.*/, '/exec');
 
-          // Prepare state for sync
           const stateToSave = JSON.parse(JSON.stringify(state));
-          delete stateToSave.currentUser; // Don't sync session
+          delete stateToSave.currentUser;
           
-          // IMPORTANT: Strip base64 photos from the state to avoid hitting Google Sheets cell limit
           if (stateToSave.vehicles) {
             stateToSave.vehicles.forEach((v: any) => {
               if (v.stops) {
@@ -208,7 +193,6 @@ const App: React.FC = () => {
             });
           }
 
-          // Use text/plain to avoid preflight OPTIONS request
           await fetch(cleanUrl, {
             method: 'POST',
             mode: 'no-cors', 
@@ -225,7 +209,7 @@ const App: React.FC = () => {
           console.error("Falha no salvamento", e);
           setSyncStatus('error');
         }
-      }, 3000); // Increased debounce to 3s to avoid conflict
+      }, 3000);
 
       return () => clearTimeout(debouncedSave);
     }
@@ -247,7 +231,7 @@ const App: React.FC = () => {
   const handleImportData = (newData: AppState) => {
       setState(prev => ({
           ...newData,
-          currentUser: prev.currentUser // Keep current session active
+          currentUser: prev.currentUser 
       }));
       saveState(newData);
   };
@@ -261,17 +245,22 @@ const App: React.FC = () => {
            if (cleanUrl.includes('/edit')) cleanUrl = cleanUrl.replace(/\/edit.*/, '/exec');
 
            // Process Photos Compression if needed
+           let processedPayload = { ...payload, action: 'log' };
+
            if (payload.photos && payload.photos.length > 0) {
-               const compressedPhotos = await Promise.all(
-                   payload.photos.map((p: string) => compressImage(p))
-               );
-               payload.photos = compressedPhotos;
+               try {
+                  const compressedPhotos = await Promise.all(
+                      payload.photos.map((p: string) => compressImage(p))
+                  );
+                  processedPayload.photos = compressedPhotos;
+               } catch(e) {
+                  console.error("Photo compression failed, sending raw", e);
+               }
            }
 
-           // Ensure action is 'log' for this payload
-           const finalPayload = { ...payload, action: 'log' };
+           // Force action property and ensure JSON stringification
+           const bodyData = JSON.stringify(processedPayload);
 
-           // Use text/plain to avoid preflight
            await fetch(cleanUrl, {
              method: 'POST',
              mode: 'no-cors', 
@@ -281,9 +270,9 @@ const App: React.FC = () => {
              headers: {
                'Content-Type': 'text/plain;charset=utf-8', 
              },
-             body: JSON.stringify(finalPayload)
+             body: bodyData
            });
-           console.log("Enviado para Sheets (Log):", payload.vehicle);
+           console.log("Enviado para Sheets (Log):", processedPayload.vehicle);
       } catch (err) {
           console.error("Falha no envio para Sheets", err);
       }
@@ -317,7 +306,7 @@ const App: React.FC = () => {
              body: JSON.stringify(payload)
            });
            
-           saveSyncUrl(cleanUrl); // Save it since we tested it
+           saveSyncUrl(cleanUrl);
            alert("Solicitação enviada! Verifique se uma nova linha apareceu na sua planilha.");
       } catch (e) {
            alert("Erro de rede ao tentar enviar: " + e);
@@ -328,7 +317,7 @@ const App: React.FC = () => {
     const timestamp = new Date().toISOString();
     const currentUserUnitId = state.currentUser?.unitId;
     
-    // 1. Update Local State (Specific Stop)
+    // 1. Update Local State
     setState(prev => ({
       ...prev,
       vehicles: prev.vehicles.map(v => 
@@ -352,10 +341,15 @@ const App: React.FC = () => {
     }));
 
     // 2. Send to Google Sheets (Log)
+    // We must pull from state carefully, or just use the arguments and lookup
     const vehicle = state.vehicles.find(v => v.id === vehicleId);
-    const stop = vehicle?.stops.find(s => s.unitId === currentUserUnitId);
-    const employee = state.employees.find(e => e.id === employeeId);
     const unit = state.units.find(u => u.id === currentUserUnitId);
+    const employee = state.employees.find(e => e.id === employeeId);
+    
+    // We need to find the stop that WAS just updated.
+    // Note: In the previous state (before set above applied fully), the status was PENDING.
+    // We just need to find the stop corresponding to this unit.
+    const stop = vehicle?.stops.find(s => s.unitId === currentUserUnitId);
 
     if (vehicle && employee && stop && unit) {
         const payload = {
@@ -366,9 +360,11 @@ const App: React.FC = () => {
             stopType: stop.type,
             employee: employee.name,
             status: 'ATENDIDO',
-            photos: photos
+            photos: photos // Pass raw photos, compression happens in sendToGoogleSheets
         };
-        await sendToGoogleSheets(payload);
+        
+        // Trigger the send
+        sendToGoogleSheets(payload);
     }
   };
 
@@ -507,7 +503,6 @@ const App: React.FC = () => {
             onLogout={handleLogout}
             syncStatus={(state.googleSheetsUrl || getSyncUrl()) ? syncStatus : undefined}
           />
-          <AIChatWidget state={state} />
         </>
       )}
       
