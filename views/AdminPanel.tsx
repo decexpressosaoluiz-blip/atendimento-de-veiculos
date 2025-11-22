@@ -323,13 +323,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // --- UPDATED APPS SCRIPT CODE WITH CORRECT PHOTO HANDLING ---
   const appsScriptCode = `
 /*
-  ATUALIZAÇÃO DE SCRIPT v2.0 (Correção de Fotos e Permissões):
+  ATUALIZAÇÃO CRÍTICA v3.0 (Correção Final de Permissões e Fotos):
   
   1. Cole este código no script.google.com e Salve.
-  2. IMPORTANTE: Clique em "Implantar" > "Nova implantação".
-  3. Em "Quem pode acessar", selecione "QUALQUER PESSOA" (Anyone).
-  4. Copie a NOVA URL gerada.
+  2. **IMPORTANTE**: Selecione a função "setup" na lista acima e clique em "Executar".
+     Isso pedirá as permissões necessárias para o Drive e Planilhas.
+  3. Após autorizar, clique em "Implantar" > "Nova implantação".
+  4. Em "Quem pode acessar", selecione "QUALQUER PESSOA" (Anyone).
+  5. Copie a NOVA URL gerada.
 */
+
+function setup() {
+  // Execute esta função manualmente para autorizar os escopos
+  var ss = getDB();
+  var folderName = "SaoLuiz_Fotos";
+  var folders = DriveApp.getFoldersByName(folderName);
+  if (!folders.hasNext()) {
+    DriveApp.createFolder(folderName);
+  }
+  console.log("Configuração inicial concluída. Permissões OK.");
+}
 
 function getDB() {
   var ss;
@@ -347,7 +360,7 @@ function getDB() {
         ss = SpreadsheetApp.create(fileName);
       }
     } catch (e) {
-      throw new Error("ERRO PERMISSÃO DRIVE: Execute a função manualmente uma vez para aceitar permissões.");
+      throw new Error("ERRO PERMISSÃO DRIVE: Execute a função 'setup' manualmente uma vez.");
     }
   }
   return ss;
@@ -374,7 +387,7 @@ function doGet(e) {
 
 function doPost(e) {
   var lock = LockService.getScriptLock();
-  lock.tryLock(10000);
+  lock.tryLock(30000); // Aumentado timeout para fotos
   try {
     var output = { result: "success" };
     var jsonString = e.postData.contents;
@@ -400,12 +413,15 @@ function doPost(e) {
             var folderName = "SaoLuiz_Fotos";
             var folders = DriveApp.getFoldersByName(folderName);
             var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
-            folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+            
+            // Tenta definir permissão pública na pasta (pode falhar em domínios corporativos restritos, mas tentamos)
+            try { folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch(e) {}
             
             for (var i = 0; i < data.photos.length; i++) {
                var raw = data.photos[i];
                var contentType = "image/jpeg";
                var b64Data = raw;
+               
                if (raw.indexOf('base64,') > -1) {
                    var parts = raw.split('base64,');
                    contentType = parts[0].replace('data:', '').replace(';', '');
@@ -414,10 +430,15 @@ function doPost(e) {
                
                var blob = Utilities.newBlob(Utilities.base64Decode(b64Data), contentType, data.vehicle + "_" + Date.now() + "_" + i + ".jpg");
                var file = folder.createFile(blob);
-               file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); // Garante acesso público
+               
+               // Tenta definir permissão pública no arquivo
+               try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch(e) {}
+               
                photoLinks.push(file.getUrl());
             }
-          } catch(err) { photoLinks.push("Erro Foto: " + err.toString()); }
+          } catch(err) { 
+             photoLinks.push("Erro Foto: " + err.toString()); 
+          }
        }
 
        // Salva todos os links separados por quebra de linha na mesma célula
@@ -919,8 +940,10 @@ function doPost(e) {
                         <p className="text-xs text-slate-500 mb-2">
                             Copie o código abaixo e cole no editor de Script do Google.
                         </p>
-                        <div className="p-3 bg-red-50 text-red-800 text-xs rounded-lg mb-3 border border-red-200 font-bold animate-pulse">
-                           ⚠️ CRÍTICO: ATUALIZE O SCRIPT PARA CORRIGIR O UPLOAD DE FOTOS. APÓS ATUALIZAR, GERE UMA NOVA IMPLANTAÇÃO.
+                        <div className="p-3 bg-amber-50 text-amber-800 text-xs rounded-lg mb-3 border border-amber-200 font-bold">
+                           🚀 PASSO 1: Copie o código.<br/>
+                           🚀 PASSO 2: No editor do Google, execute a função <code>setup</code> para liberar o Drive.<br/>
+                           🚀 PASSO 3: Faça nova implantação.
                         </div>
                         <div className="relative group">
                             <pre className="bg-slate-900 text-slate-50 p-4 rounded-xl text-[10px] font-mono overflow-x-auto whitespace-pre-wrap border border-slate-700 h-64">

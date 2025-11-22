@@ -71,13 +71,9 @@ const App: React.FC = () => {
 
             const response = await fetch(fetchUrl, {
                 method: 'GET',
-                mode: 'cors',
-                credentials: 'omit',
                 redirect: 'follow',
-                referrerPolicy: 'no-referrer',
                 headers: {
-                    'Content-Type': 'text/plain',
-                    'Accept': 'application/json'
+                    'Content-Type': 'text/plain;charset=utf-8',
                 }
             });
             
@@ -195,10 +191,8 @@ const App: React.FC = () => {
 
           await fetch(cleanUrl, {
             method: 'POST',
-            mode: 'no-cors', 
+            mode: 'no-cors', // 'no-cors' is safer for auto-save to prevent preflight blocks
             redirect: 'follow',
-            referrerPolicy: 'no-referrer',
-            credentials: 'omit', 
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({ action: 'saveState', state: stateToSave })
           });
@@ -258,23 +252,24 @@ const App: React.FC = () => {
                }
            }
 
-           // Force action property and ensure JSON stringification
            const bodyData = JSON.stringify(processedPayload);
 
-           // NOTE: Using mode: 'cors' with 'text/plain' should work for simple POSTs if script returns proper headers.
-           // Apps Script ContentService generally handles this. 
-           await fetch(cleanUrl, {
+           // CRITICAL FIX: Use 'text/plain' to avoid CORS preflight (OPTIONS) which fails on Google Script
+           // We use 'cors' mode here to actually see if it fails, unlike no-cors which swallows errors
+           const response = await fetch(cleanUrl, {
              method: 'POST',
-             mode: 'no-cors', 
              redirect: 'follow',
-             referrerPolicy: 'no-referrer',
-             credentials: 'omit', 
              headers: {
                'Content-Type': 'text/plain;charset=utf-8', 
              },
              body: bodyData
            });
-           console.log("Enviado para Sheets (Log):", processedPayload.vehicle);
+
+           if (!response.ok) throw new Error("Network response was not ok");
+           
+           const resText = await response.text();
+           console.log("Sheet Response:", resText);
+
       } catch (err) {
           console.error("Falha no envio para Sheets", err);
       }
@@ -298,20 +293,35 @@ const App: React.FC = () => {
                photos: []
            };
 
-           await fetch(cleanUrl, {
+           const response = await fetch(cleanUrl, {
              method: 'POST',
-             mode: 'no-cors', 
              redirect: 'follow',
-             referrerPolicy: 'no-referrer',
-             credentials: 'omit',
              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
              body: JSON.stringify(payload)
            });
+
+           if (!response.ok) throw new Error("Falha na conexão HTTP: " + response.status);
            
-           saveSyncUrl(cleanUrl);
-           alert("Solicitação enviada! Verifique se uma nova linha apareceu na sua planilha.");
-      } catch (e) {
-           alert("Erro de rede ao tentar enviar: " + e);
+           const text = await response.text();
+           try {
+               const json = JSON.parse(text);
+               if (json.result === 'success') {
+                   alert("✅ Sucesso! Conexão estabelecida. Uma linha de teste foi criada na planilha.");
+                   saveSyncUrl(cleanUrl);
+               } else {
+                   alert("⚠️ O Script respondeu, mas houve um erro: " + (json.error || "Desconhecido"));
+               }
+           } catch (e) {
+               console.warn("Resposta não-JSON:", text);
+               if (text.includes('Google Accounts')) {
+                   alert("❌ Erro de Permissão: Você precisa republicar o script e selecionar 'Quem pode acessar: Qualquer Pessoa'.");
+               } else {
+                   alert("✅ Enviado! (Resposta sem JSON). Verifique a planilha.");
+               }
+           }
+
+      } catch (e: any) {
+           alert("❌ Erro ao enviar: " + e.message + "\n\nVerifique se a URL está correta e se o script foi implantado como 'Qualquer Pessoa'.");
       }
   };
 
