@@ -12,6 +12,26 @@ import { LoginView } from './views/LoginView';
 import { UnitDashboard } from './views/UnitDashboard';
 import { AdminPanel } from './views/AdminPanel';
 
+// Helper to compress images for smoother upload
+const compressImage = (base64Str: string, maxWidth = 800, quality = 0.6): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = base64Str;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const scaleSize = maxWidth / img.width;
+      canvas.width = maxWidth;
+      canvas.height = img.height * scaleSize;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => {
+       resolve(base64Str); // Fallback if fails
+    }
+  });
+};
+
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>(INITIAL_STATE);
   const [isLoading, setIsLoading] = useState(true);
@@ -52,6 +72,14 @@ const App: React.FC = () => {
       if (!state.googleSheetsUrl) return;
       
       try {
+           // Process Photos Compression if needed
+           if (payload.photos && payload.photos.length > 0) {
+               const compressedPhotos = await Promise.all(
+                   payload.photos.map((p: string) => compressImage(p))
+               );
+               payload.photos = compressedPhotos;
+           }
+
            await fetch(state.googleSheetsUrl, {
              method: 'POST',
              mode: 'no-cors', 
@@ -61,9 +89,9 @@ const App: React.FC = () => {
              },
              body: JSON.stringify(payload)
            });
-           console.log("Request sent to Sheets (Opaque response due to no-cors):", payload);
+           console.log("Enviado para Sheets (Compressão aplicada):", payload.vehicle);
       } catch (err) {
-          console.error("Failed to send to sheets", err);
+          console.error("Falha no envio para Sheets", err);
       }
   };
 

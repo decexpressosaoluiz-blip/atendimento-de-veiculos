@@ -106,11 +106,12 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
     setZoom(1);
 
     try {
+      // Optimization: Use 720p. Easier for mobile browsers to handle continuously without asking permissions repeatedly due to memory pressure
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
           facingMode: mode,
-          width: { ideal: 1920 }, 
-          height: { ideal: 1080 }
+          width: { ideal: 1280 }, 
+          height: { ideal: 720 }
         } 
       });
       streamRef.current = stream;

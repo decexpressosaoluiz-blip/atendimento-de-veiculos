@@ -4,7 +4,7 @@ import { AppState, JustificationStatus, Employee, Vehicle, VehicleStatus, UserAc
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
-import { Check, X, Download, Plus, Truck, Users, Key, Edit, Save, Trash2, Link, Map, ArrowRight, MapPin, Upload, Copy, HelpCircle, FileJson, Zap, Lightbulb, TrendingUp, AlertOctagon, AlertTriangle } from 'lucide-react';
+import { Check, X, Download, Plus, Truck, Users, Key, Edit, Save, Trash2, Link, Map, ArrowRight, MapPin, Upload, Copy, HelpCircle, FileJson, Zap, Lightbulb, TrendingUp, AlertTriangle } from 'lucide-react';
 
 interface AdminPanelProps {
   state: AppState;
@@ -292,18 +292,57 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       showToast("Usuário criado.");
   };
 
+  // --- UPDATED APPS SCRIPT CODE FOR IMAGES ---
   const appsScriptCode = `
 function doPost(e) {
   var lock = LockService.getScriptLock();
-  lock.tryLock(10000); // Wait up to 10s
+  lock.tryLock(10000); // Aguarda até 10s por outros processos
 
   try {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    
+    // Cria cabeçalho se estiver vazio
     if (sheet.getLastRow() === 0) {
-      sheet.appendRow(["Data/Hora", "Veículo", "Rota", "Unidade", "Tipo Parada", "Funcionário", "Status", "Qtd Fotos", "Dados Brutos"]);
+      sheet.appendRow(["Data/Hora", "Veículo", "Rota", "Unidade", "Tipo Parada", "Funcionário", "Status", "Imagens (Drive)", "Dados JSON"]);
     }
     
     var data = JSON.parse(e.postData.contents);
+    var photoLinks = [];
+
+    // PROCESSAMENTO DE FOTOS (Salva no Google Drive)
+    if (data.photos && data.photos.length > 0) {
+      // Cria ou busca pasta principal
+      var folderName = "SaoLuizExpress_Fotos";
+      var folder;
+      var folders = DriveApp.getFoldersByName(folderName);
+      if (folders.hasNext()) {
+        folder = folders.next();
+      } else {
+        folder = DriveApp.createFolder(folderName);
+      }
+
+      // Salva cada foto
+      data.photos.forEach(function(photoBase64, index) {
+        try {
+           // Remove header se existir (ex: data:image/jpeg;base64,)
+           var cleanBase64 = photoBase64;
+           if (photoBase64.indexOf('base64,') > -1) {
+             cleanBase64 = photoBase64.split('base64,')[1];
+           }
+           
+           var decoded = Utilities.base64Decode(cleanBase64);
+           var fileName = data.vehicle + "_" + data.unit + "_" + index + "_" + new Date().getTime() + ".jpg";
+           var blob = Utilities.newBlob(decoded, "image/jpeg", fileName);
+           
+           var file = folder.createFile(blob);
+           file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+           photoLinks.push(file.getUrl());
+        } catch (err) {
+           photoLinks.push("Erro foto " + index);
+        }
+      });
+    }
+    
     sheet.appendRow([
       data.timestamp,
       data.vehicle,
@@ -312,11 +351,11 @@ function doPost(e) {
       data.stopType,
       data.employee,
       data.status,
-      data.photos ? data.photos.length : 0,
+      photoLinks.join("\\n"), // Quebra de linha na célula se houver várias
       JSON.stringify(data)
     ]);
   
-    return ContentService.createTextOutput(JSON.stringify({"result":"success"})).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({"result":"success", "photosSaved": photoLinks.length})).setMimeType(ContentService.MimeType.JSON);
   } catch(e) {
     return ContentService.createTextOutput(JSON.stringify({"result":"error", "error": e.toString()})).setMimeType(ContentService.MimeType.JSON);
   } finally {
@@ -757,7 +796,7 @@ function doPost(e) {
                             <HelpCircle className="w-4 h-4"/> Novo Script Seguro (Obrigatório)
                         </h3>
                         <p className="text-xs text-slate-500 mb-2">
-                            Atenção: Se você clicou em "Executar" no Apps Script e deu erro, é normal. Você deve <b>Implantar</b>.
+                            Este script cria uma pasta no Drive e salva as fotos, colocando o link na planilha.
                         </p>
                         <ol className="list-decimal list-inside text-xs space-y-1 text-slate-700 dark:text-slate-300 mb-4">
                             <li>Copie o código abaixo e substitua TUDO no Apps Script.</li>
