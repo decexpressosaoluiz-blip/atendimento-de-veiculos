@@ -50,7 +50,9 @@ const App: React.FC = () => {
 
   // Function to fetch data from cloud (Reusable)
   const performCloudSync = async (url: string) => {
-     let cleanUrl = url?.trim();
+     // Aggressive cleaning for mobile copy-paste artifacts
+     let cleanUrl = (url || '').trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
+     
      if (!cleanUrl) return false;
 
      // Auto-fix common URL mistake: copying the editor link instead of the exec link
@@ -73,7 +75,8 @@ const App: React.FC = () => {
                 method: 'GET',
                 credentials: 'omit', // CRITICAL: Prevents sending cookies which causes CORS errors with Google Scripts
                 redirect: 'follow',
-                mode: 'cors'
+                mode: 'cors',
+                referrerPolicy: 'no-referrer' // Improves privacy and avoids some GAS referrer blocks
             });
             
             if (!response.ok) {
@@ -106,6 +109,11 @@ const App: React.FC = () => {
                     throw new Error("Invalid JSON format received from server.");
                 }
             }
+
+            // Check for explicit error from script
+            if (cloudData && cloudData.error) {
+                throw new Error("Erro Remoto: " + cloudData.error);
+            }
             
             // Validate if it's a valid state object or empty
             if (cloudData) {
@@ -133,7 +141,7 @@ const App: React.FC = () => {
          } catch (e) {
             console.warn(`Sync attempt ${attempt + 1} failed:`, e);
             // If it's a specific error we know, throw immediately
-            if (e instanceof Error && (e.message.includes('Erro de Permissão') || e.message.includes('Erro no Script'))) throw e;
+            if (e instanceof Error && (e.message.includes('Erro de Permissão') || e.message.includes('Erro no Script') || e.message.includes('Erro Remoto'))) throw e;
             
             if (attempt === 2) throw e; 
             await new Promise(resolve => setTimeout(resolve, 2000 * (attempt + 1)));
@@ -203,6 +211,7 @@ const App: React.FC = () => {
             method: 'POST',
             mode: 'no-cors', 
             redirect: 'follow',
+            referrerPolicy: 'no-referrer',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({ action: 'saveState', state: stateToSave })
           });
@@ -264,6 +273,7 @@ const App: React.FC = () => {
              method: 'POST',
              mode: 'no-cors', 
              redirect: 'follow',
+             referrerPolicy: 'no-referrer',
              headers: {
                'Content-Type': 'text/plain;charset=utf-8', 
              },
@@ -297,6 +307,7 @@ const App: React.FC = () => {
              method: 'POST',
              mode: 'no-cors', 
              redirect: 'follow',
+             referrerPolicy: 'no-referrer',
              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
              body: JSON.stringify(payload)
            });

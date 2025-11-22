@@ -295,21 +295,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // --- UPDATED APPS SCRIPT CODE WITH ROBUST DB HANDLING ---
   const appsScriptCode = `
-// --- SÃO LUIZ EXPRESS: SCRIPT DE SINCRONIZAÇÃO V4 (ROBUST STANDALONE) ---
-// IMPLANTAÇÃO: 
-// 1. Publique como Web App
-// 2. Execute como: "Eu" (Me)
-// 3. Quem pode acessar: "Qualquer pessoa" (Anyone)
-// 4. EXECUTE A FUNÇÃO 'doGet' UMA VEZ NO EDITOR PARA AUTORIZAR O DRIVE/PLANILHA
+/*
+  INSTRUÇÕES IMPORTANTES PARA "FAILED TO FETCH":
+  1. Publique como Web App.
+  2. Executar como: "Eu" (Me).
+  3. Quem pode acessar: "Qualquer pessoa" (Anyone) -> ESSENCIAL!
+  4. DEPOIS DE SALVAR O CÓDIGO, CLIQUE EM 'EXECUTAR' NA FUNÇÃO 'doGet' DENTRO DO EDITOR.
+     Isso forçará o Google a pedir permissão para acessar seu Drive e Planilhas.
+     Sem isso, o script falha silenciosamente e retorna erro de rede.
+*/
 
 function getDB() {
   var ss;
   try {
     // Tenta pegar a planilha ativa (funciona se o script estiver vinculado)
     ss = SpreadsheetApp.getActiveSpreadsheet();
-  } catch(e) {
-    // Ignora erro se não estiver vinculado
-  }
+  } catch(e) {}
   
   if (!ss) {
     // Modo Standalone: Procura arquivo pelo nome ou cria um novo
@@ -322,7 +323,7 @@ function getDB() {
         ss = SpreadsheetApp.create(fileName);
       }
     } catch (e) {
-      throw new Error("Erro ao acessar Drive. Verifique se você autorizou o script: " + e.toString());
+      throw new Error("ERRO PERMISSÃO DRIVE: " + e.toString());
     }
   }
   return ss;
@@ -341,7 +342,7 @@ function doGet(e) {
     if (!data || data === "") data = "{}";
     return ContentService.createTextOutput(data).setMimeType(ContentService.MimeType.JSON);
   } catch(e) {
-    // Retorna JSON de erro em vez de HTML para evitar CORS error
+    // Retorna JSON com erro explicito
     return ContentService.createTextOutput(JSON.stringify({error: e.toString()})).setMimeType(ContentService.MimeType.JSON);
   } finally {
     lock.releaseLock();
@@ -862,6 +863,8 @@ function doPost(e) {
                         </p>
                         <div className="p-3 bg-yellow-50 text-yellow-800 text-xs rounded-lg mb-3 border border-yellow-200 font-bold">
                            ⚠️ IMPORTANTE: Publique como Web App (Executar como: EU / Acesso: QUALQUER PESSOA).
+                           <br/>
+                           ⚠️ DEPOIS DE SALVAR, EXECUTE A FUNÇÃO 'doGet' NO EDITOR PARA AUTORIZAR.
                         </div>
                         <div className="relative group">
                             <pre className="bg-slate-900 text-slate-50 p-4 rounded-xl text-[10px] font-mono overflow-x-auto whitespace-pre-wrap border border-slate-700 h-64">

@@ -46,10 +46,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, onSyncUrl 
 
   const handleSyncSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-      const cleanUrl = syncUrl.trim();
+      // Remove invisible characters and spaces
+      const cleanUrl = syncUrl.trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
 
-      if (!cleanUrl.startsWith('http')) {
-          setSyncMessage({ text: "URL inválida. Certifique-se de copiar o link completo (https://...)", type: 'error' });
+      if (cleanUrl.length < 10 || !cleanUrl.toLowerCase().startsWith('http')) {
+          setSyncMessage({ text: "URL inválida. Copie o link 'Web App URL' completo.", type: 'error' });
           return;
       }
 
@@ -58,14 +59,20 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, onSyncUrl 
 
       try {
           await onSyncUrl(cleanUrl);
-          setSyncMessage({ text: "Sincronização concluída! Dados baixados com sucesso.", type: 'success' });
+          setSyncMessage({ text: "Conectado! Dados sincronizados.", type: 'success' });
           setTimeout(() => {
               setShowSyncModal(false);
               setSyncMessage(null);
           }, 2000);
       } catch (err: any) {
           console.error("Sync error details:", err);
-          setSyncMessage({ text: `Erro: ${err.message || "Falha de conexão"}`, type: 'error' });
+          let msg = err.message || "Erro desconhecido";
+          
+          if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+              msg = "Falha de Conexão. Verifique se a implantação está definida como 'Qualquer pessoa' (Anyone). Execute 'doGet' no editor para autorizar.";
+          }
+          
+          setSyncMessage({ text: msg, type: 'error' });
       } finally {
           setIsSyncing(false);
       }
@@ -142,7 +149,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, onSyncUrl 
                 onClick={() => setShowSyncModal(true)}
                 className="text-xs font-bold text-sle-blue flex items-center gap-1.5 hover:underline opacity-70 hover:opacity-100 transition-opacity"
              >
-                <Cloud className="w-3 h-3" /> Configurar Nuvem
+                <Cloud className="w-3 h-3" /> Configurar Nuvem (Opcional)
              </button>
           </div>
         </div>
