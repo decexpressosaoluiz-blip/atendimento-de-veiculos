@@ -52,18 +52,18 @@ const App: React.FC = () => {
       if (!state.googleSheetsUrl) return;
       
       try {
-           // Use 'no-cors' mode which is standard for calling Google Apps Script Web Apps from client-side JS
-           // The Payload must be stringified in the body.
-           // NOTE: The Apps Script must have doPost(e) { ... JSON.parse(e.postData.contents) ... }
+           // Using 'no-cors' matches standard GAS Web App requirements for client-side calls
+           // content-type text/plain avoids CORS preflight OPTIONS request which GAS doesn't handle well
            await fetch(state.googleSheetsUrl, {
              method: 'POST',
              mode: 'no-cors', 
+             redirect: 'follow',
              headers: {
-               'Content-Type': 'text/plain;charset=utf-8', // Important for avoiding preflight
+               'Content-Type': 'text/plain;charset=utf-8', 
              },
              body: JSON.stringify(payload)
            });
-           console.log("Sent to Sheets:", payload);
+           console.log("Request sent to Sheets (Opaque response due to no-cors):", payload);
       } catch (err) {
           console.error("Failed to send to sheets", err);
       }
@@ -72,25 +72,29 @@ const App: React.FC = () => {
   const handleTestSettings = async (url: string) => {
       if (!url) return;
       try {
-           // Send a test ping
+           const payload = { 
+               timestamp: new Date().toLocaleString('pt-BR'),
+               vehicle: 'TESTE-CONEXAO',
+               route: 'SISTEMA',
+               unit: 'ADMIN',
+               stopType: 'TESTE',
+               employee: 'SÃO LUIZ ADMIN',
+               status: 'OK',
+               photos: []
+           };
+
            await fetch(url, {
              method: 'POST',
              mode: 'no-cors', 
+             redirect: 'follow',
              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-             body: JSON.stringify({ 
-                 timestamp: new Date().toLocaleString('pt-BR'),
-                 vehicle: 'TESTE',
-                 route: 'CONEXÃO',
-                 unit: 'ADMIN',
-                 stopType: '-',
-                 employee: 'SISTEMA',
-                 status: 'CONEXÃO OK',
-                 photos: []
-             })
+             body: JSON.stringify(payload)
            });
-           alert("Dados de teste enviados para a planilha! Verifique se uma nova linha apareceu.");
+           
+           // In no-cors mode, we can't read the response. If fetch didn't throw, it was "sent".
+           alert("Solicitação enviada! Verifique se uma nova linha apareceu na sua planilha agora.\n\nSe não apareceu:\n1. Vá no Apps Script\n2. Clique em Implantar > Gerenciar Implantações\n3. Crie uma NOVA versão.");
       } catch (e) {
-           alert("Erro ao tentar enviar: " + e);
+           alert("Erro de rede ao tentar enviar: " + e);
       }
   };
 

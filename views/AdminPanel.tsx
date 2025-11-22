@@ -284,30 +284,50 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       showToast("Usuário criado.");
   };
 
-  // --- APPS SCRIPT TEMPLATE ---
+  // --- APPS SCRIPT TEMPLATE (ROBUST VERSION) ---
   const appsScriptCode = `
 function doPost(e) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  var data = JSON.parse(e.postData.contents);
+  var lock = LockService.getScriptLock();
+  lock.tryLock(10000); // Wait up to 10s for other requests
+
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    
+    // Create Header if needed
+    if (sheet.getLastRow() === 0) {
+      sheet.appendRow(["Data/Hora", "Veículo", "Rota", "Unidade", "Tipo Parada", "Funcionário", "Status", "Qtd Fotos", "Raw Data"]);
+    }
+    
+    var data;
+    try {
+      data = JSON.parse(e.postData.contents);
+    } catch(err) {
+      // Fallback for debugging
+      sheet.appendRow([new Date(), "ERROR", "-", "-", "-", "-", "JSON PARSE ERROR", 0, e.postData.contents]);
+      return ContentService.createTextOutput(JSON.stringify({"result":"error"})).setMimeType(ContentService.MimeType.JSON);
+    }
   
-  // Se o cabeçalho não existir, cria
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow(["Data/Hora", "Veículo", "Rota", "Unidade", "Tipo Parada", "Funcionário", "Status", "Fotos (Qtd)"]);
+    sheet.appendRow([
+      data.timestamp,
+      data.vehicle,
+      data.route,
+      data.unit,
+      data.stopType,
+      data.employee,
+      data.status,
+      data.photos ? data.photos.length : 0,
+      JSON.stringify(data)
+    ]);
+  
+    return ContentService.createTextOutput(JSON.stringify({"result":"success"}))
+      .setMimeType(ContentService.MimeType.JSON);
+      
+  } catch(e) {
+    return ContentService.createTextOutput(JSON.stringify({"result":"error", "error": e.toString()}))
+      .setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
   }
-  
-  sheet.appendRow([
-    data.timestamp,
-    data.vehicle,
-    data.route,
-    data.unit,
-    data.stopType,
-    data.employee,
-    data.status,
-    data.photos ? data.photos.length : 0
-  ]);
-  
-  return ContentService.createTextOutput(JSON.stringify({"result":"success"}))
-    .setMimeType(ContentService.MimeType.JSON);
 }
   `.trim();
 
@@ -648,15 +668,16 @@ function doPost(e) {
                         <ol className="list-decimal list-inside text-sm space-y-2 text-slate-700 dark:text-slate-300 mb-4">
                             <li>Crie uma planilha nova no Google Sheets.</li>
                             <li>Vá em <strong>Extensões</strong> {'>'} <strong>Apps Script</strong>.</li>
-                            <li>Apague todo o código que estiver lá e cole o código abaixo.</li>
-                            <li>Clique em <strong>Implantar</strong> {'>'} <strong>Nova implantação</strong>.</li>
-                            <li>Em "Selecione o tipo", escolha <strong>App da Web</strong>.</li>
-                            <li>Em "Quem pode acessar", escolha <strong>Qualquer pessoa</strong>.</li>
-                            <li>Clique em "Implantar", copie a URL (Web App URL) e cole ao lado.</li>
+                            <li>Apague todo o código e cole o <strong>novo código abaixo</strong>.</li>
+                            <li>Clique no botão azul <strong>Implantar</strong> {'>'} <strong>Gerenciar implantações</strong>.</li>
+                            <li>Clique em <strong>Editar (Lápis)</strong>.</li>
+                            <li>Em Versão, escolha <strong>Nova versão</strong>. (Essencial!)</li>
+                            <li>Quem pode acessar: <strong>Qualquer pessoa</strong>.</li>
+                            <li>Copie a URL e cole aqui.</li>
                         </ol>
                         
                         <div className="relative group">
-                            <pre className="bg-slate-900 text-slate-50 p-4 rounded-xl text-xs font-mono overflow-x-auto whitespace-pre-wrap border border-slate-700">
+                            <pre className="bg-slate-900 text-slate-50 p-4 rounded-xl text-xs font-mono overflow-x-auto whitespace-pre-wrap border border-slate-700 h-64">
                                 {appsScriptCode}
                             </pre>
                             <button 
