@@ -323,71 +323,52 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // --- UPDATED APPS SCRIPT CODE WITH CORRECT PHOTO HANDLING ---
   const appsScriptCode = `
 /*
-  ATUALIZAÇÃO CRÍTICA v3.0 (Correção Final de Permissões e Fotos):
+  VERSÃO 4.0 - SÃO LUIZ EXPRESS (Correção de Upload e Sync)
   
-  1. Cole este código no script.google.com e Salve.
-  2. **IMPORTANTE**: Selecione a função "setup" na lista acima e clique em "Executar".
-     Isso pedirá as permissões necessárias para o Drive e Planilhas.
-  3. Após autorizar, clique em "Implantar" > "Nova implantação".
-  4. Em "Quem pode acessar", selecione "QUALQUER PESSOA" (Anyone).
-  5. Copie a NOVA URL gerada.
+  INSTRUÇÕES CRÍTICAS:
+  1. Cole este código.
+  2. Selecione "setup" na barra superior e clique em "Executar" para autorizar permissões.
+  3. Clique em "Implantar" > "Gerenciar implantações".
+  4. Clique no ícone de Lápis (Editar).
+  5. Em "Versão", escolha "Nova versão".
+  6. Clique em "Implantar".
+  
+  SE NÃO CRIAR "NOVA VERSÃO", O CÓDIGO NÃO ATUALIZA!
 */
 
 function setup() {
-  // Execute esta função manualmente para autorizar os escopos
   var ss = getDB();
+  // Garante que a pasta existe e pede permissão ao Drive
   var folderName = "SaoLuiz_Fotos";
   var folders = DriveApp.getFoldersByName(folderName);
   if (!folders.hasNext()) {
     DriveApp.createFolder(folderName);
   }
-  console.log("Configuração inicial concluída. Permissões OK.");
+  console.log("Setup concluído.");
 }
 
 function getDB() {
-  var ss;
-  try {
-    ss = SpreadsheetApp.getActiveSpreadsheet();
-  } catch(e) {}
-  
-  if (!ss) {
-    try {
-      var fileName = "DB_SaoLuiz_System";
-      var files = DriveApp.getFilesByName(fileName);
-      if (files.hasNext()) {
-        ss = SpreadsheetApp.open(files.next());
-      } else {
-        ss = SpreadsheetApp.create(fileName);
-      }
-    } catch (e) {
-      throw new Error("ERRO PERMISSÃO DRIVE: Execute a função 'setup' manualmente uma vez.");
-    }
+  var fileName = "DB_SaoLuiz_System";
+  var files = DriveApp.getFilesByName(fileName);
+  if (files.hasNext()) {
+    return SpreadsheetApp.open(files.next());
+  } else {
+    return SpreadsheetApp.create(fileName);
   }
-  return ss;
 }
 
 function doGet(e) {
-  var lock = LockService.getScriptLock();
-  lock.tryLock(10000);
-  try {
-    var ss = getDB();
-    var sheet = ss.getSheetByName("DB_State");
-    var data = "{}";
-    if (sheet) {
-       data = sheet.getRange("A1").getValue();
-    }
-    if (!data || data === "") data = "{}";
-    return ContentService.createTextOutput(data).setMimeType(ContentService.MimeType.JSON);
-  } catch(e) {
-    return ContentService.createTextOutput(JSON.stringify({error: e.toString()})).setMimeType(ContentService.MimeType.JSON);
-  } finally {
-    lock.releaseLock();
-  }
+  return ContentService.createTextOutput(JSON.stringify({
+    status: "online",
+    version: "4.0",
+    message: "O script está funcionando. Use POST para enviar dados."
+  })).setMimeType(ContentService.MimeType.JSON);
 }
 
 function doPost(e) {
   var lock = LockService.getScriptLock();
-  lock.tryLock(30000); // Aumentado timeout para fotos
+  lock.tryLock(30000); 
+
   try {
     var output = { result: "success" };
     var jsonString = e.postData.contents;
@@ -396,15 +377,16 @@ function doPost(e) {
     
     if (data.action === 'saveState') {
        var sheet = ss.getSheetByName("DB_State");
-       if (!sheet) { sheet = ss.insertSheet("DB_State"); sheet.hideSheet(); }
+       if (!sheet) { sheet = ss.insertSheet("DB_State"); }
+       sheet.clear();
        sheet.getRange("A1").setValue(JSON.stringify(data.state));
        output.type = "state_saved";
     } else {
-       // LOGICA DE REGISTRO DE FOTOS
+       // LOG (Fotos e Atendimentos)
        var sheet = ss.getSheetByName("Logs");
        if (!sheet) { 
          sheet = ss.insertSheet("Logs");
-         sheet.appendRow(["Data/Hora", "Veículo", "Rota", "Unidade", "Tipo Parada", "Funcionário", "Status", "Links Fotos", "JSON"]);
+         sheet.appendRow(["Data/Hora", "Veículo", "Rota", "Unidade", "Tipo", "Funcionário", "Status", "Links Fotos", "JSON Raw"]);
        }
        
        var photoLinks = [];
@@ -414,42 +396,57 @@ function doPost(e) {
             var folders = DriveApp.getFoldersByName(folderName);
             var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
             
-            // Tenta definir permissão pública na pasta (pode falhar em domínios corporativos restritos, mas tentamos)
-            try { folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch(e) {}
+            // Tenta permissão pública (falha silenciosa se não permitido pelo domínio)
+            try { folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch(p) {}
             
             for (var i = 0; i < data.photos.length; i++) {
-               var raw = data.photos[i];
-               var contentType = "image/jpeg";
-               var b64Data = raw;
-               
-               if (raw.indexOf('base64,') > -1) {
-                   var parts = raw.split('base64,');
-                   contentType = parts[0].replace('data:', '').replace(';', '');
-                   b64Data = parts[1];
+               try {
+                 var raw = data.photos[i];
+                 var contentType = "image/jpeg";
+                 var b64Data = raw;
+                 
+                 if (raw.indexOf('base64,') > -1) {
+                     var parts = raw.split('base64,');
+                     contentType = parts[0].replace('data:', '').replace(';', '');
+                     b64Data = parts[1];
+                 }
+                 
+                 var blob = Utilities.newBlob(Utilities.base64Decode(b64Data), contentType, data.vehicle + "_" + Date.now() + "_" + i + ".jpg");
+                 var file = folder.createFile(blob);
+                 try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch(p) {}
+                 photoLinks.push(file.getUrl());
+               } catch (errPhoto) {
+                 photoLinks.push("Erro ao salvar img " + i + ": " + errPhoto.toString());
                }
-               
-               var blob = Utilities.newBlob(Utilities.base64Decode(b64Data), contentType, data.vehicle + "_" + Date.now() + "_" + i + ".jpg");
-               var file = folder.createFile(blob);
-               
-               // Tenta definir permissão pública no arquivo
-               try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch(e) {}
-               
-               photoLinks.push(file.getUrl());
             }
-          } catch(err) { 
-             photoLinks.push("Erro Foto: " + err.toString()); 
+          } catch(errFolder) { 
+             photoLinks.push("Erro Pasta Drive: " + errFolder.toString()); 
           }
        }
 
-       // Salva todos os links separados por quebra de linha na mesma célula
        var linksString = photoLinks.join("\\n");
+       
+       // Fallback para dados opcionais
+       var r_time = data.timestamp || new Date().toString();
+       var r_veh = data.vehicle || "-";
+       var r_route = data.route || "-";
+       var r_unit = data.unit || "-";
+       var r_type = data.stopType || "-";
+       var r_emp = data.employee || "-";
+       var r_stat = data.status || "-";
 
-       sheet.appendRow([data.timestamp, data.vehicle, data.route, data.unit, data.stopType, data.employee, data.status, linksString, JSON.stringify(data)]);
+       sheet.appendRow([r_time, r_veh, r_route, r_unit, r_type, r_emp, r_stat, linksString, JSON.stringify(data)]);
        output.type = "log_saved";
     }
+    
     return ContentService.createTextOutput(JSON.stringify(output)).setMimeType(ContentService.MimeType.JSON);
+    
   } catch(e) {
-    return ContentService.createTextOutput(JSON.stringify({"result":"error", "error": e.toString()})).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({
+      result: "error", 
+      error: e.toString(),
+      stack: e.stack
+    })).setMimeType(ContentService.MimeType.JSON);
   } finally {
     lock.releaseLock();
   }
@@ -941,9 +938,7 @@ function doPost(e) {
                             Copie o código abaixo e cole no editor de Script do Google.
                         </p>
                         <div className="p-3 bg-amber-50 text-amber-800 text-xs rounded-lg mb-3 border border-amber-200 font-bold">
-                           🚀 PASSO 1: Copie o código.<br/>
-                           🚀 PASSO 2: No editor do Google, execute a função <code>setup</code> para liberar o Drive.<br/>
-                           🚀 PASSO 3: Faça nova implantação.
+                           🚀 ATENÇÃO: Após colar o código, você DEVE ir em "Implantar" > "Gerenciar" > "Editar" > "Nova Versão". Caso contrário, a atualização não surtirá efeito.
                         </div>
                         <div className="relative group">
                             <pre className="bg-slate-900 text-slate-50 p-4 rounded-xl text-[10px] font-mono overflow-x-auto whitespace-pre-wrap border border-slate-700 h-64">

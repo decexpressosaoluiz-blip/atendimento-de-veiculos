@@ -12,18 +12,25 @@ import { UnitDashboard } from './views/UnitDashboard';
 import { AdminPanel } from './views/AdminPanel';
 
 // Helper to compress images for smoother upload
-const compressImage = (base64Str: string, maxWidth = 800, quality = 0.6): Promise<string> => {
+const compressImage = (base64Str: string, maxWidth = 600, quality = 0.5): Promise<string> => {
   return new Promise((resolve) => {
     const img = new Image();
     img.src = base64Str;
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      const scaleSize = maxWidth / img.width;
-      canvas.width = maxWidth;
+      let scaleSize = 1;
+      if (img.width > maxWidth) {
+        scaleSize = maxWidth / img.width;
+      }
+      canvas.width = img.width * scaleSize;
       canvas.height = img.height * scaleSize;
       const ctx = canvas.getContext('2d');
-      ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL('image/jpeg', quality));
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      } else {
+        resolve(base64Str);
+      }
     };
     img.onerror = () => {
        resolve(base64Str); // Fallback if fails
@@ -179,6 +186,7 @@ const App: React.FC = () => {
           const stateToSave = JSON.parse(JSON.stringify(state));
           delete stateToSave.currentUser;
           
+          // Remove photos from state dump to avoid quota issues
           if (stateToSave.vehicles) {
             stateToSave.vehicles.forEach((v: any) => {
               if (v.stops) {
@@ -191,7 +199,7 @@ const App: React.FC = () => {
 
           await fetch(cleanUrl, {
             method: 'POST',
-            mode: 'no-cors', // 'no-cors' is safer for auto-save to prevent preflight blocks
+            mode: 'no-cors', // 'no-cors' is safer for auto-save state updates
             redirect: 'follow',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({ action: 'saveState', state: stateToSave })
@@ -243,19 +251,28 @@ const App: React.FC = () => {
 
            if (payload.photos && payload.photos.length > 0) {
                try {
+                  console.log("Compressing photos...");
                   const compressedPhotos = await Promise.all(
                       payload.photos.map((p: string) => compressImage(p))
                   );
                   processedPayload.photos = compressedPhotos;
+                  console.log("Compression done.");
                } catch(e) {
                   console.error("Photo compression failed, sending raw", e);
                }
            }
 
            const bodyData = JSON.stringify(processedPayload);
+           
+           // Critical check for payload size
+           if (bodyData.length > 9 * 1024 * 1024) {
+               alert("Erro: As fotos são muito grandes para enviar. Tente tirar menos fotos ou reduzir a resolução.");
+               return;
+           }
 
-           // CRITICAL FIX: Use 'text/plain' to avoid CORS preflight (OPTIONS) which fails on Google Script
-           // We use 'cors' mode here to actually see if it fails, unlike no-cors which swallows errors
+           console.log("Sending payload to Sheets...");
+           
+           // Use normal CORS mode to detect failures
            const response = await fetch(cleanUrl, {
              method: 'POST',
              redirect: 'follow',
@@ -265,13 +282,29 @@ const App: React.FC = () => {
              body: bodyData
            });
 
-           if (!response.ok) throw new Error("Network response was not ok");
+           if (!response.ok) throw new Error(`Network Error: ${response.status}`);
            
            const resText = await response.text();
            console.log("Sheet Response:", resText);
+           
+           try {
+               const json = JSON.parse(resText);
+               if (json.result === 'error') {
+                   console.error("Script Error:", json.error);
+                   alert("Erro no Script Google: " + json.error);
+               } else {
+                   console.log("Success log saved");
+               }
+           } catch (jsonErr) {
+               // If not JSON, assume success if text is not error-like
+               if (resText.includes('error') || resText.includes('Exception')) {
+                   console.error("Raw Error:", resText);
+               }
+           }
 
-      } catch (err) {
+      } catch (err: any) {
           console.error("Falha no envio para Sheets", err);
+          alert("Falha de conexão ao salvar na planilha. Verifique sua internet ou se o Script foi implantado corretamente.\n\nErro: " + err.message);
       }
   };
 
@@ -329,7 +362,7 @@ const App: React.FC = () => {
     const timestamp = new Date().toISOString();
     const currentUserUnitId = state.currentUser?.unitId;
     
-    // 1. Update Local State
+    // 1. Update Local State Optimistically
     setState(prev => ({
       ...prev,
       vehicles: prev.vehicles.map(v => 
@@ -370,6 +403,7 @@ const App: React.FC = () => {
             photos: photos
         };
         
+        // Call async without awaiting to not block UI, but handled errors will alert
         sendToGoogleSheets(payload);
     }
   };
