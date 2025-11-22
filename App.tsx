@@ -19,11 +19,7 @@ const App: React.FC = () => {
   // Load State on Mount
   useEffect(() => {
     const loaded = loadState();
-    setState(prev => ({
-       ...loaded,
-       users: loaded.users || INITIAL_STATE.users,
-       employees: loaded.employees || INITIAL_STATE.employees
-    }));
+    setState(loaded);
     setIsLoading(false);
     document.documentElement.classList.remove('dark');
   }, []);
@@ -42,6 +38,60 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
     setState(prev => ({ ...prev, currentUser: null }));
+  };
+
+  const handleImportData = (newData: AppState) => {
+      setState(prev => ({
+          ...newData,
+          currentUser: prev.currentUser // Keep current session active
+      }));
+      saveState(newData);
+  };
+
+  const sendToGoogleSheets = async (payload: any) => {
+      if (!state.googleSheetsUrl) return;
+      
+      try {
+           // Use 'no-cors' mode which is standard for calling Google Apps Script Web Apps from client-side JS
+           // The Payload must be stringified in the body.
+           // NOTE: The Apps Script must have doPost(e) { ... JSON.parse(e.postData.contents) ... }
+           await fetch(state.googleSheetsUrl, {
+             method: 'POST',
+             mode: 'no-cors', 
+             headers: {
+               'Content-Type': 'text/plain;charset=utf-8', // Important for avoiding preflight
+             },
+             body: JSON.stringify(payload)
+           });
+           console.log("Sent to Sheets:", payload);
+      } catch (err) {
+          console.error("Failed to send to sheets", err);
+      }
+  };
+
+  const handleTestSettings = async (url: string) => {
+      if (!url) return;
+      try {
+           // Send a test ping
+           await fetch(url, {
+             method: 'POST',
+             mode: 'no-cors', 
+             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+             body: JSON.stringify({ 
+                 timestamp: new Date().toLocaleString('pt-BR'),
+                 vehicle: 'TESTE',
+                 route: 'CONEXÃO',
+                 unit: 'ADMIN',
+                 stopType: '-',
+                 employee: 'SISTEMA',
+                 status: 'CONEXÃO OK',
+                 photos: []
+             })
+           });
+           alert("Dados de teste enviados para a planilha! Verifique se uma nova linha apareceu.");
+      } catch (e) {
+           alert("Erro ao tentar enviar: " + e);
+      }
   };
 
   const handleServiceVehicle = async (vehicleId: string, employeeId: string, photos: string[]) => {
@@ -72,33 +122,23 @@ const App: React.FC = () => {
     }));
 
     // 2. Send to Google Sheets
-    if (state.googleSheetsUrl) {
-       const vehicle = state.vehicles.find(v => v.id === vehicleId);
-       const stop = vehicle?.stops.find(s => s.unitId === currentUserUnitId);
-       const employee = state.employees.find(e => e.id === employeeId);
-       const unit = state.units.find(u => u.id === currentUserUnitId);
+    const vehicle = state.vehicles.find(v => v.id === vehicleId);
+    const stop = vehicle?.stops.find(s => s.unitId === currentUserUnitId);
+    const employee = state.employees.find(e => e.id === employeeId);
+    const unit = state.units.find(u => u.id === currentUserUnitId);
 
-       if (vehicle && employee && stop) {
-         try {
-           const payload = {
-             timestamp: timestamp,
-             vehicle: vehicle.number,
-             route: vehicle.route,
-             unit: unit?.name || 'N/A',
-             stopType: stop.type, // Added stop type info
-             employee: employee.name,
-             status: 'COMPLETED',
-             photos: photos
-           };
-           
-           await fetch(state.googleSheetsUrl, {
-             method: 'POST',
-             mode: 'no-cors', 
-             headers: { 'Content-Type': 'application/json' },
-             body: JSON.stringify(payload)
-           });
-         } catch (err) { console.error(err); }
-       }
+    if (vehicle && employee && stop && unit) {
+        const payload = {
+            timestamp: new Date().toLocaleString('pt-BR'),
+            vehicle: vehicle.number,
+            route: vehicle.route,
+            unit: unit.name,
+            stopType: stop.type, // 'ORIGIN', 'INTERMEDIATE', 'DESTINATION'
+            employee: employee.name,
+            status: 'ATENDIDO',
+            photos: photos
+        };
+        await sendToGoogleSheets(payload);
     }
   };
 
@@ -106,6 +146,7 @@ const App: React.FC = () => {
     const vehicle = state.vehicles.find(v => v.id === vehicleId);
     const currentUserUnitId = state.currentUser?.unitId || '';
     const stop = vehicle?.stops.find(s => s.unitId === currentUserUnitId);
+    const unit = state.units.find(u => u.id === currentUserUnitId);
     
     const justificationId = Date.now().toString();
     const timestamp = new Date().toISOString();
@@ -135,25 +176,17 @@ const App: React.FC = () => {
       ]
     }));
 
-    if (state.googleSheetsUrl && vehicle && stop) {
-       const unit = state.units.find(u => u.id === currentUserUnitId);
-       try {
-         await fetch(state.googleSheetsUrl, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              timestamp: timestamp,
-              vehicle: vehicle.number,
-              route: vehicle.route,
-              unit: unit?.name || 'N/A',
-              stopType: stop.type,
-              employee: 'JUSTIFICATIVA',
-              status: `LATE: ${category} - ${text}`,
-              photos: []
-            })
-         });
-       } catch (e) { console.error(e); }
+    if (vehicle && stop && unit) {
+       await sendToGoogleSheets({
+          timestamp: new Date().toLocaleString('pt-BR'),
+          vehicle: vehicle.number,
+          route: vehicle.route,
+          unit: unit.name,
+          stopType: stop.type,
+          employee: 'JUSTIFICATIVA',
+          status: `ATRASADO: ${category} - ${text}`,
+          photos: []
+       });
     }
 
     if (vehicle && stop) {
@@ -197,8 +230,8 @@ const App: React.FC = () => {
   };
 
   const handleCancelVehicle = (id: string) => {
-    // Soft delete logic can be complex with stops, for now assume global cancel
-    // Or remove vehicle entirely
+    // Soft delete
+    setState(prev => ({ ...prev, vehicles: prev.vehicles.filter(v => v.id !== id) }));
   };
 
   const handleDeleteVehicle = (id: string) => {
@@ -209,7 +242,6 @@ const App: React.FC = () => {
     }));
   };
 
-  // ... (Employee/User handlers unchanged) ...
   const handleAddEmployee = (employee: Employee) => {
     setState(prev => ({ ...prev, employees: [...prev.employees, { ...employee, active: true }] }));
   };
@@ -285,6 +317,8 @@ const App: React.FC = () => {
               onAddUser={handleAddUser}
               onDeleteUser={handleDeleteUser}
               onUpdateSettings={handleUpdateSettings}
+              onImportData={handleImportData}
+              onTestSettings={handleTestSettings}
             />
           ) : (
             <Navigate to="/" />
