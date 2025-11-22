@@ -1,6 +1,10 @@
 
 import { Unit, Employee, Vehicle, VehicleStatus, AppState, UserAccount } from './types';
 
+// URL Fixa do Google Apps Script (Deploy Global)
+// Garante que não há espaços em branco ou quebras de linha
+export const GLOBAL_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxk06K6RNgmxgMO4jYQVByGG7co5G2D5FyTEqWy2ib0c5jFMo1V7MYkfKiskWkNT4TNHw/exec";
+
 export const INITIAL_UNITS: Unit[] = [
   { id: 'u1', name: 'DEC - MATRIZ', location: 'Matriz Administrativa', alarmIntervalMinutes: 60 },
   { id: 'u2', name: 'DEC - ARAGUAIA SHOPPING', location: 'Goiânia, GO', alarmIntervalMinutes: 60 },
@@ -121,5 +125,5 @@ export const INITIAL_STATE: AppState = {
   vehicles: INITIAL_VEHICLES,
   justifications: [],
   alarms: [],
-  googleSheetsUrl: ''
+  googleSheetsUrl: GLOBAL_APPS_SCRIPT_URL || ''
 };

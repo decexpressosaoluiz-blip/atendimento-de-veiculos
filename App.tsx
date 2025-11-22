@@ -50,31 +50,79 @@ const App: React.FC = () => {
 
   // Function to fetch data from cloud (Reusable)
   const performCloudSync = async (url: string) => {
-     try {
-        const response = await fetch(`${url}?t=${Date.now()}`);
-        if (!response.ok) throw new Error('Network error');
-        
-        const cloudData = await response.json();
-        
-        // Validate if it's a valid state object
-        if (cloudData && cloudData.vehicles && Array.isArray(cloudData.vehicles)) {
-           console.log("Cloud state loaded successfully");
-           isRemoteUpdate.current = true;
-           
-           setState(prev => ({
-             ...prev,
-             ...cloudData, // Overwrite with cloud data
-             currentUser: prev.currentUser, // Preserve local session
-             googleSheetsUrl: url // Ensure URL is set
-           }));
-           
-           // Save persistent URL
-           saveSyncUrl(url);
-           return true;
-        }
-     } catch (e) {
-        console.error("Failed to load cloud state:", e);
-        throw e;
+     const cleanUrl = url.trim();
+     
+     // Retry logic - Attempt 3 times
+     for (let attempt = 0; attempt < 3; attempt++) {
+         try {
+            // Explicitly use GET and follow redirects (Critical for Google Apps Script)
+            // Added 'action' param to ensure uniqueness and avoid aggressive caching
+            const response = await fetch(`${cleanUrl}?action=read&t=${Date.now()}`, {
+                method: 'GET',
+                redirect: 'follow',
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Network error: ${response.status}`);
+            }
+            
+            const text = await response.text();
+            
+            // Guard against HTML responses (e.g. Google Sign-in page or Error page)
+            // This happens if the script is not deployed as "Anyone"
+            if (text.trim().startsWith('<')) {
+                 throw new Error("Invalid response: Received HTML. Check Script Permissions (Must be 'Anyone').");
+            }
+
+            let cloudData;
+            try {
+                cloudData = JSON.parse(text);
+            } catch (e) {
+                // If empty or invalid JSON, treat as empty state if it's the first run
+                console.warn("JSON Parse warning:", e);
+                // If we received something that isn't JSON but isn't HTML error, it might be empty string
+                if (!text.trim()) {
+                    cloudData = {};
+                } else {
+                    throw new Error("Invalid JSON format received from server.");
+                }
+            }
+            
+            // Validate if it's a valid state object or empty
+            if (cloudData) {
+               console.log("Cloud state loaded successfully");
+               isRemoteUpdate.current = true;
+               
+               setState(prev => {
+                   // Merge cloud data carefully
+                   // We want to keep the current user session active locally
+                   const newState = {
+                       ...prev,
+                       ...cloudData,
+                       currentUser: prev.currentUser, 
+                       googleSheetsUrl: cleanUrl 
+                   };
+                   return newState;
+               });
+               
+               // Save persistent URL
+               saveSyncUrl(cleanUrl);
+               return true;
+            }
+            
+            // If we got here with valid data, success, break loop
+            break; 
+
+         } catch (e) {
+            console.warn(`Sync attempt ${attempt + 1} failed:`, e);
+            // If it's the last attempt, rethrow to notify UI
+            if (attempt === 2) throw e; 
+            // Wait before retry (exponential backoff-ish)
+            await new Promise(resolve => setTimeout(resolve, 1500 * (attempt + 1)));
+         }
      }
      return false;
   };
@@ -90,6 +138,8 @@ const App: React.FC = () => {
         await performCloudSync(url);
         setSyncStatus('idle');
       } catch (e) {
+        console.error("Sync Error:", e);
+        // We don't block the app, just show error status
         setSyncStatus('error');
       }
     };
@@ -116,6 +166,7 @@ const App: React.FC = () => {
       const debouncedSave = setTimeout(async () => {
         setSyncStatus('syncing');
         try {
+          const cleanUrl = url.trim();
           // Prepare state for sync
           const stateToSave = JSON.parse(JSON.stringify(state));
           delete stateToSave.currentUser; // Don't sync session
@@ -131,9 +182,9 @@ const App: React.FC = () => {
             });
           }
 
-          await fetch(url, {
+          await fetch(cleanUrl, {
             method: 'POST',
-            mode: 'no-cors',
+            mode: 'no-cors', // Allows posting to GAS without CORS preflight issues (opaque response)
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({ action: 'saveState', state: stateToSave })
           });
@@ -176,6 +227,7 @@ const App: React.FC = () => {
       if (!url) return;
       
       try {
+           const cleanUrl = url.trim();
            // Process Photos Compression if needed
            if (payload.photos && payload.photos.length > 0) {
                const compressedPhotos = await Promise.all(
@@ -187,7 +239,7 @@ const App: React.FC = () => {
            // Ensure action is 'log' for this payload
            const finalPayload = { ...payload, action: 'log' };
 
-           await fetch(url, {
+           await fetch(cleanUrl, {
              method: 'POST',
              mode: 'no-cors', 
              redirect: 'follow',
@@ -205,6 +257,7 @@ const App: React.FC = () => {
   const handleTestSettings = async (url: string) => {
       if (!url) return;
       try {
+           const cleanUrl = url.trim();
            const payload = { 
                action: 'log',
                timestamp: new Date().toLocaleString('pt-BR'),
@@ -217,7 +270,7 @@ const App: React.FC = () => {
                photos: []
            };
 
-           await fetch(url, {
+           await fetch(cleanUrl, {
              method: 'POST',
              mode: 'no-cors', 
              redirect: 'follow',
@@ -225,7 +278,7 @@ const App: React.FC = () => {
              body: JSON.stringify(payload)
            });
            
-           saveSyncUrl(url); // Save it since we tested it
+           saveSyncUrl(cleanUrl); // Save it since we tested it
            alert("Solicitação enviada! Verifique se uma nova linha apareceu na sua planilha.");
       } catch (e) {
            alert("Erro de rede ao tentar enviar: " + e);

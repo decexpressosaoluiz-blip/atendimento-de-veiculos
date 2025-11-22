@@ -1,6 +1,6 @@
 
 import { AppState, VehicleStatus } from '../types';
-import { INITIAL_STATE } from '../constants';
+import { INITIAL_STATE, GLOBAL_APPS_SCRIPT_URL } from '../constants';
 
 const DATA_KEY = 'sle_app_data_v3';
 const SESSION_KEY = 'sle_user_session_v1';
@@ -23,8 +23,13 @@ export const getSyncUrl = (): string | null => {
 export const loadState = (): AppState => {
   let state = { ...INITIAL_STATE };
 
+  // 1. Priority: Force Global URL if defined (Deploy Mode)
+  if (GLOBAL_APPS_SCRIPT_URL) {
+    state.googleSheetsUrl = GLOBAL_APPS_SCRIPT_URL;
+  }
+
   try {
-    // 1. Load Main Data
+    // 2. Load Main Data
     const serializedData = localStorage.getItem(DATA_KEY);
     if (serializedData) {
       const data = JSON.parse(serializedData);
@@ -41,14 +46,18 @@ export const loadState = (): AppState => {
       if (data.vehicles) state.vehicles = data.vehicles;
       if (data.justifications) state.justifications = data.justifications;
       
-      // Load stored URL from data, but prefer the specific key if available
-      if (data.googleSheetsUrl) state.googleSheetsUrl = data.googleSheetsUrl;
+      // Load stored URL from data only if GLOBAL is not set
+      if (data.googleSheetsUrl && !GLOBAL_APPS_SCRIPT_URL) {
+        state.googleSheetsUrl = data.googleSheetsUrl;
+      }
     }
 
-    // 2. Override/Ensure URL from specific storage (Crucial for Mobile Sync)
-    const persistentUrl = getSyncUrl();
-    if (persistentUrl) {
-      state.googleSheetsUrl = persistentUrl;
+    // 3. Override/Ensure URL from specific storage (Mobile Sync) - Only if Global not set
+    if (!GLOBAL_APPS_SCRIPT_URL) {
+      const persistentUrl = getSyncUrl();
+      if (persistentUrl) {
+        state.googleSheetsUrl = persistentUrl;
+      }
     }
 
   } catch (e) {
@@ -56,7 +65,7 @@ export const loadState = (): AppState => {
   }
 
   try {
-    // 3. Load Session
+    // 4. Load Session
     const serializedSession = localStorage.getItem(SESSION_KEY);
     if (serializedSession) {
       const currentUser = JSON.parse(serializedSession);
@@ -64,6 +73,11 @@ export const loadState = (): AppState => {
     }
   } catch (e) {
     console.error("Failed to load user session", e);
+  }
+
+  // Final check to ensure global URL wins
+  if (GLOBAL_APPS_SCRIPT_URL) {
+    state.googleSheetsUrl = GLOBAL_APPS_SCRIPT_URL;
   }
 
   return state;
