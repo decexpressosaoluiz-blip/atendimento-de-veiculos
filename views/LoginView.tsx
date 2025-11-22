@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { UserAccount } from '../types';
 import { Button } from '../components/Button';
 import { Truck, Lock, User, Eye, EyeOff, ArrowRight, Cloud, Link, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { GLOBAL_APPS_SCRIPT_URL } from '../constants';
 
 interface LoginViewProps {
   users: UserAccount[];
@@ -46,16 +47,20 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, onSyncUrl 
 
   const handleSyncSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-      // Strict Cleaning: Remove invisible characters, newlines, and ALL spaces
-      const cleanUrl = syncUrl.replace(/\s/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '');
+      
+      // Use entered URL or global fallback
+      let rawUrl = syncUrl || GLOBAL_APPS_SCRIPT_URL || '';
+      
+      // AGGRESSIVE CLEANING: Remove all whitespace, newlines, and invisible unicode chars
+      const cleanUrl = rawUrl.replace(/\s/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
 
       if (cleanUrl.length < 10 || !cleanUrl.toLowerCase().startsWith('http')) {
-          setSyncMessage({ text: "URL inválida. Copie o link 'Web App URL' completo.", type: 'error' });
+          setSyncMessage({ text: "URL inválida.", type: 'error' });
           return;
       }
 
       if (!cleanUrl.endsWith('/exec')) {
-          setSyncMessage({ text: "A URL deve terminar em '/exec'. Verifique se copiou corretamente.", type: 'error' });
+          setSyncMessage({ text: "A URL deve terminar em '/exec'.", type: 'error' });
           return;
       }
 
@@ -74,7 +79,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, onSyncUrl 
           let msg = err.message || "Erro desconhecido";
           
           if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
-              msg = "Falha de Conexão. O script deve ser 'Execute as: Me' e 'Access: Anyone' (Qualquer Pessoa).";
+              msg = "Falha de Rede/CORS. O Script deve estar como 'Execute as: Me' e 'Anyone'.";
           }
           
           setSyncMessage({ text: msg, type: 'error' });
@@ -154,7 +159,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, onSyncUrl 
                 onClick={() => setShowSyncModal(true)}
                 className="text-xs font-bold text-sle-blue flex items-center gap-1.5 hover:underline opacity-70 hover:opacity-100 transition-opacity"
              >
-                <Cloud className="w-3 h-3" /> Configurar Nuvem (Opcional)
+                <Cloud className="w-3 h-3" /> 
+                {GLOBAL_APPS_SCRIPT_URL ? "Verificar Status da Nuvem" : "Configurar Nuvem (Opcional)"}
              </button>
           </div>
         </div>
@@ -170,15 +176,19 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, onSyncUrl 
                   </div>
                   
                   <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-                      Para usar o sistema no celular, cole abaixo a <b>URL do Web App</b> gerada no painel do computador. Isso fará o download dos dados mais recentes.
+                      {GLOBAL_APPS_SCRIPT_URL 
+                        ? "Uma URL de conexão foi detectada no sistema. Clique em sincronizar para testar."
+                        : "Para usar o sistema no celular, cole abaixo a URL do Web App gerada no painel do computador."
+                      }
                   </p>
 
                   <form onSubmit={handleSyncSubmit} className="space-y-4">
                       <input 
-                          className="w-full border border-slate-200 bg-slate-50 rounded-xl p-3 text-xs font-mono focus:ring-2 focus:ring-sle-blue focus:border-transparent outline-none text-slate-600"
+                          className={`w-full border border-slate-200 bg-slate-50 rounded-xl p-3 text-xs font-mono focus:ring-2 focus:ring-sle-blue focus:border-transparent outline-none text-slate-600 ${GLOBAL_APPS_SCRIPT_URL ? 'opacity-50 cursor-not-allowed' : ''}`}
                           placeholder="https://script.google.com/..."
-                          value={syncUrl}
-                          onChange={e => setSyncUrl(e.target.value)}
+                          value={GLOBAL_APPS_SCRIPT_URL || syncUrl}
+                          onChange={e => !GLOBAL_APPS_SCRIPT_URL && setSyncUrl(e.target.value)}
+                          readOnly={!!GLOBAL_APPS_SCRIPT_URL}
                       />
                       
                       {syncMessage && (

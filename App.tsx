@@ -51,7 +51,7 @@ const App: React.FC = () => {
   // Function to fetch data from cloud (Reusable)
   const performCloudSync = async (url: string) => {
      // Aggressive cleaning for mobile copy-paste artifacts: removes all whitespace and invisible chars (Zero Width Space, etc)
-     let cleanUrl = (url || '').replace(/\s/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '');
+     let cleanUrl = (url || '').replace(/\s/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
      
      if (!cleanUrl) return false;
 
@@ -72,11 +72,13 @@ const App: React.FC = () => {
 
             // NOTE: Added referrerPolicy 'no-referrer' to bypass some GAS security checks on mobile/iframe
             // NOTE: Added credentials 'omit' to prevent browser sending cookies which confuses Google Auth when script is set to "Execute as Me"
+            // NOTE: Added cache 'no-store' to ensure fresh fetch
             const response = await fetch(fetchUrl, {
                 method: 'GET',
                 credentials: 'omit', 
                 redirect: 'follow',
-                referrerPolicy: 'no-referrer'
+                referrerPolicy: 'no-referrer',
+                cache: 'no-store'
             });
             
             if (!response.ok) {
@@ -93,7 +95,7 @@ const App: React.FC = () => {
                     throw new Error("Erro de Permissão: O Script deve ser implantado como 'Qualquer Pessoa' (Anyone).");
                  }
                  if (text.includes('Error')) {
-                     throw new Error("Erro Interno do Script Google. Verifique os logs do Apps Script.");
+                     throw new Error("Erro Interno do Script Google. Verifique os logs do Apps Script (View > Executions).");
                  }
                  throw new Error("Erro no Script: O servidor retornou HTML (erro) ao invés de JSON.");
             }
@@ -188,7 +190,7 @@ const App: React.FC = () => {
       const debouncedSave = setTimeout(async () => {
         setSyncStatus('syncing');
         try {
-          let cleanUrl = url.replace(/\s/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '');
+          let cleanUrl = url.replace(/\s/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
           if (cleanUrl.includes('/edit')) cleanUrl = cleanUrl.replace(/\/edit.*/, '/exec');
 
           // Prepare state for sync
@@ -213,6 +215,7 @@ const App: React.FC = () => {
             redirect: 'follow',
             referrerPolicy: 'no-referrer',
             credentials: 'omit', // CRITICAL for Execute As Me
+            cache: 'no-store',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({ action: 'saveState', state: stateToSave })
           });
@@ -255,7 +258,7 @@ const App: React.FC = () => {
       if (!url) return;
       
       try {
-           let cleanUrl = url.replace(/\s/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '');
+           let cleanUrl = url.replace(/\s/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
            if (cleanUrl.includes('/edit')) cleanUrl = cleanUrl.replace(/\/edit.*/, '/exec');
 
            // Process Photos Compression if needed
@@ -276,6 +279,7 @@ const App: React.FC = () => {
              redirect: 'follow',
              referrerPolicy: 'no-referrer',
              credentials: 'omit', // CRITICAL for Execute As Me
+             cache: 'no-store',
              headers: {
                'Content-Type': 'text/plain;charset=utf-8', 
              },
@@ -290,7 +294,7 @@ const App: React.FC = () => {
   const handleTestSettings = async (url: string) => {
       if (!url) return;
       try {
-           let cleanUrl = url.replace(/\s/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '');
+           let cleanUrl = url.replace(/\s/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
            if (cleanUrl.includes('/edit')) cleanUrl = cleanUrl.replace(/\/edit.*/, '/exec');
 
            const payload = { 
@@ -311,6 +315,7 @@ const App: React.FC = () => {
              redirect: 'follow',
              referrerPolicy: 'no-referrer',
              credentials: 'omit', // CRITICAL for Execute As Me
+             cache: 'no-store',
              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
              body: JSON.stringify(payload)
            });
