@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppState, VehicleStatus, JustificationStatus, Employee, Vehicle, UserAccount, TripStop } from './types';
@@ -56,12 +55,26 @@ const App: React.FC = () => {
      // Retry logic - Attempt 3 times with slight backoff
      for (let attempt = 0; attempt < 3; attempt++) {
          try {
-            // Using 'no-store' forces the browser to fetch from network, avoiding stale CORS cache.
-            // 'mode: cors' is explicit.
-            const response = await fetch(`${cleanUrl}?action=read`, {
+            // Use timestamp for cache busting instead of cache: 'no-store' to be friendlier to proxies/browsers
+            const cacheBuster = new Date().getTime();
+            
+            // Safe URL construction
+            let fetchUrl = cleanUrl;
+            try {
+                const urlObj = new URL(cleanUrl);
+                urlObj.searchParams.set('action', 'read');
+                urlObj.searchParams.set('t', String(cacheBuster));
+                fetchUrl = urlObj.toString();
+            } catch (e) {
+                // Fallback for manual string if URL constructor fails
+                const separator = cleanUrl.includes('?') ? '&' : '?';
+                fetchUrl = `${cleanUrl}${separator}action=read&t=${cacheBuster}`;
+            }
+
+            const response = await fetch(fetchUrl, {
                 method: 'GET',
                 mode: 'cors',
-                cache: 'no-store',
+                // Removed 'cache: no-store' to reduce CORS preflight triggers on some networks
                 redirect: 'follow',
                 credentials: 'omit', // Ensure no cookies interfere with "Anyone" access
                 referrerPolicy: 'no-referrer'
@@ -74,9 +87,8 @@ const App: React.FC = () => {
             const text = await response.text();
             
             // Guard against HTML responses (e.g. Google Sign-in page or Error page)
-            // This happens if the script is not deployed as "Anyone"
             if (text.trim().startsWith('<')) {
-                 console.error("Sync received HTML instead of JSON. Likely permission issue.");
+                 console.warn("Sync received HTML instead of JSON. Likely permission issue.");
                  throw new Error("Invalid response: Received HTML. Check Script Permissions (Must be 'Anyone').");
             }
 
@@ -85,7 +97,6 @@ const App: React.FC = () => {
                 cloudData = JSON.parse(text);
             } catch (e) {
                 console.warn("JSON Parse warning:", e);
-                // If empty or not JSON, assume empty state if it's valid network response
                 if (!text.trim()) {
                     cloudData = {};
                 } else {
@@ -180,6 +191,7 @@ const App: React.FC = () => {
             });
           }
 
+          // Use text/plain to avoid preflight OPTIONS request
           await fetch(cleanUrl, {
             method: 'POST',
             mode: 'no-cors', 
@@ -238,6 +250,7 @@ const App: React.FC = () => {
            // Ensure action is 'log' for this payload
            const finalPayload = { ...payload, action: 'log' };
 
+           // Use text/plain to avoid preflight
            await fetch(cleanUrl, {
              method: 'POST',
              mode: 'no-cors', 

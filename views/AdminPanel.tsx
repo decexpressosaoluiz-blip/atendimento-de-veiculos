@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { AppState, JustificationStatus, Employee, Vehicle, VehicleStatus, UserAccount } from '../types';
 import { Card } from '../components/Card';
@@ -295,123 +294,95 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // --- UPDATED APPS SCRIPT CODE WITH SYNC AND IMAGE LOGGING ---
   const appsScriptCode = `
-// --- SERVER SIDE SCRIPT FOR GOOGLE SHEETS ---
+// --- SÃO LUIZ EXPRESS: SCRIPT DE SINCRONIZAÇÃO ---
 
-// 1. GET: Serve the saved App State (for syncing devices)
 function doGet(e) {
+  // Função para BAIXAR o estado do App
   var lock = LockService.getScriptLock();
   lock.tryLock(10000);
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+       return ContentService.createTextOutput(JSON.stringify({error: "Script must be bound to a spreadsheet."})).setMimeType(ContentService.MimeType.JSON);
+    }
     var sheet = ss.getSheetByName("DB_State");
-    
     var data = "{}";
     if (sheet) {
        data = sheet.getRange("A1").getValue();
     }
-    
-    // If empty or not found, return empty object
     if (!data || data === "") data = "{}";
-    
-    return ContentService.createTextOutput(data)
-      .setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(data).setMimeType(ContentService.MimeType.JSON);
   } catch(e) {
-    return ContentService.createTextOutput(JSON.stringify({error: e.toString()}))
-      .setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({error: e.toString()})).setMimeType(ContentService.MimeType.JSON);
   } finally {
     lock.releaseLock();
   }
 }
 
-// 2. POST: Handle Actions (Save State OR Log Event)
 function doPost(e) {
+  // Função para SALVAR dados
   var lock = LockService.getScriptLock();
   lock.tryLock(10000);
-
   try {
+    var output = { result: "success" };
     var jsonString = e.postData.contents;
     var data = JSON.parse(jsonString);
-    var output = { result: "success" };
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    if (!ss) {
+       return ContentService.createTextOutput(JSON.stringify({error: "Script must be bound to a spreadsheet."})).setMimeType(ContentService.MimeType.JSON);
+    }
 
-    // --- ACTION A: SYNC STATE (Save app data to cloud) ---
     if (data.action === 'saveState') {
-       var ss = SpreadsheetApp.getActiveSpreadsheet();
+       // SALVAR ESTADO DO APP (JSON)
        var sheet = ss.getSheetByName("DB_State");
-       if (!sheet) {
-         sheet = ss.insertSheet("DB_State");
-         sheet.hideSheet(); // Hide to not clutter UI
-       }
-       // Save full state JSON to A1
+       if (!sheet) { sheet = ss.insertSheet("DB_State"); sheet.hideSheet(); }
        sheet.getRange("A1").setValue(JSON.stringify(data.state));
        output.type = "state_saved";
-    } 
-    
-    // --- ACTION B: LOG EVENT (Add row to spreadsheet & Save Photos) ---
-    else {
-        var sheet = ss.getSheetByName("Logs");
-        if (!sheet) {
-           sheet = ss.insertSheet("Logs");
-           sheet.appendRow(["Data/Hora", "Veículo", "Rota", "Unidade", "Tipo Parada", "Funcionário", "Status", "Foto (Link)", "JSON Dados"]);
-        }
-        
-        var photoLinks = [];
-        
-        // SAVE PHOTOS TO DRIVE
-        if (data.photos && data.photos.length > 0) {
-          var folderName = "SaoLuizExpress_Fotos";
-          var folders = DriveApp.getFoldersByName(folderName);
-          var folder;
-          
-          if (folders.hasNext()) {
-            folder = folders.next();
-          } else {
-            folder = DriveApp.createFolder(folderName);
-            folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-          }
-    
-          var photoBase64 = data.photos[0]; // Process 1st photo for link
+    } else {
+       // LOGAR OPERAÇÃO (LINHA NA PLANILHA)
+       var sheet = ss.getSheetByName("Logs");
+       if (!sheet) { 
+         sheet = ss.insertSheet("Logs");
+         sheet.appendRow(["Data/Hora", "Veículo", "Rota", "Unidade", "Tipo Parada", "Funcionário", "Status", "Link Foto", "JSON"]);
+       }
+       
+       // Salvar fotos no Drive (Opcional - Se houver fotos base64)
+       var photoLink = "";
+       if (data.photos && data.photos.length > 0) {
           try {
-               var cleanBase64 = photoBase64;
-               if (photoBase64.indexOf('base64,') > -1) {
-                 cleanBase64 = photoBase64.split('base64,')[1];
-               }
-               
-               var decoded = Utilities.base64Decode(cleanBase64);
-               var timestamp = new Date().getTime();
-               var fileName = (data.vehicle || "Foto") + "_" + timestamp + ".jpg";
-               var blob = Utilities.newBlob(decoded, "image/jpeg", fileName);
-               
-               var file = folder.createFile(blob);
-               file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-               
-               photoLinks.push('=HYPERLINK("' + file.getUrl() + '","Ver Foto")');
-          } catch (err) {
-               photoLinks.push("Erro Foto: " + err.toString());
+            var folderName = "SaoLuiz_Fotos";
+            var folders = DriveApp.getFoldersByName(folderName);
+            var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+            folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+            var cleanBase64 = data.photos[0].split('base64,')[1] || data.photos[0];
+            var blob = Utilities.newBlob(Utilities.base64Decode(cleanBase64), "image/jpeg", data.vehicle + "_" + new Date().getTime() + ".jpg");
+            var file = folder.createFile(blob);
+            file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+            photoLink = file.getUrl();
+          } catch(err) {
+            photoLink = "Erro Foto";
           }
-        }
-        
-        var photoCell = photoLinks.length > 0 ? photoLinks[0] : "";
-    
-        sheet.appendRow([
-          data.timestamp,
-          data.vehicle,
-          data.route,
-          data.unit,
-          data.stopType,
-          data.employee,
-          data.status,
-          photoCell,
+       }
+
+       sheet.appendRow([
+          data.timestamp, 
+          data.vehicle, 
+          data.route, 
+          data.unit, 
+          data.stopType, 
+          data.employee, 
+          data.status, 
+          photoLink, 
           JSON.stringify(data)
-        ]);
-        output.type = "log_appended";
+       ]);
+       output.type = "log_saved";
     }
-  
-    return ContentService.createTextOutput(JSON.stringify(output))
-      .setMimeType(ContentService.MimeType.JSON);
-      
+    
+    return ContentService.createTextOutput(JSON.stringify(output)).setMimeType(ContentService.MimeType.JSON);
   } catch(e) {
-    return ContentService.createTextOutput(JSON.stringify({"result":"error", "error": e.toString()}))
-      .setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({"result":"error", "error": e.toString()})).setMimeType(ContentService.MimeType.JSON);
   } finally {
     lock.releaseLock();
   }
