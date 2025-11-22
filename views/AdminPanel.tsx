@@ -761,7 +761,7 @@ function doPost(e) {
                         </p>
                         <ol className="list-decimal list-inside text-xs space-y-1 text-slate-700 dark:text-slate-300 mb-4">
                             <li>Copie o código abaixo e substitua TUDO no Apps Script.</li>
-                            <li>Clique em <b>Implantar > Gerenciar implantações</b>.</li>
+                            <li>Clique em <b>Implantar &gt; Gerenciar implantações</b>.</li>
                             <li>Clique no Lápis (Editar).</li>
                             <li>Mude a Versão para <b>"Nova versão"</b> (CRUCIAL!).</li>
                             <li>Clique em Implantar e use a nova URL.</li>
