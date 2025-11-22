@@ -294,18 +294,37 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // --- UPDATED APPS SCRIPT CODE WITH SYNC AND IMAGE LOGGING ---
   const appsScriptCode = `
-// --- SÃO LUIZ EXPRESS: SCRIPT DE SINCRONIZAÇÃO ---
+// --- SÃO LUIZ EXPRESS: SCRIPT DE SINCRONIZAÇÃO V3 (STANDALONE SUPPORT) ---
+// IMPLANTAÇÃO: 
+// 1. Publique como Web App
+// 2. Execute como: "Eu" (Me)
+// 3. Quem pode acessar: "Qualquer pessoa" (Anyone)
+
+// Helper para obter a planilha (funciona se for Script Vinculado ou Solto)
+function getDB() {
+  var ss;
+  try {
+    ss = SpreadsheetApp.getActiveSpreadsheet();
+  } catch(e) {}
+  
+  if (!ss) {
+    // Tenta encontrar pelo nome ou cria nova
+    var files = DriveApp.getFilesByName("DB_SaoLuiz_System");
+    if (files.hasNext()) {
+      var file = files.next();
+      ss = SpreadsheetApp.openById(file.getId());
+    } else {
+      ss = SpreadsheetApp.create("DB_SaoLuiz_System");
+    }
+  }
+  return ss;
+}
 
 function doGet(e) {
-  // Função para BAIXAR o estado do App
   var lock = LockService.getScriptLock();
   lock.tryLock(10000);
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    if (!ss) {
-       // Fail-safe se não estiver vinculado
-       return ContentService.createTextOutput(JSON.stringify({error: "Script must be bound to a spreadsheet."})).setMimeType(ContentService.MimeType.JSON);
-    }
+    var ss = getDB();
     var sheet = ss.getSheetByName("DB_State");
     var data = "{}";
     if (sheet) {
@@ -321,34 +340,26 @@ function doGet(e) {
 }
 
 function doPost(e) {
-  // Função para SALVAR dados
   var lock = LockService.getScriptLock();
   lock.tryLock(10000);
   try {
     var output = { result: "success" };
     var jsonString = e.postData.contents;
     var data = JSON.parse(jsonString);
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getDB();
     
-    if (!ss) {
-       return ContentService.createTextOutput(JSON.stringify({error: "Script must be bound to a spreadsheet."})).setMimeType(ContentService.MimeType.JSON);
-    }
-
     if (data.action === 'saveState') {
-       // SALVAR ESTADO DO APP (JSON)
        var sheet = ss.getSheetByName("DB_State");
        if (!sheet) { sheet = ss.insertSheet("DB_State"); sheet.hideSheet(); }
        sheet.getRange("A1").setValue(JSON.stringify(data.state));
        output.type = "state_saved";
     } else {
-       // LOGAR OPERAÇÃO (LINHA NA PLANILHA)
        var sheet = ss.getSheetByName("Logs");
        if (!sheet) { 
          sheet = ss.insertSheet("Logs");
          sheet.appendRow(["Data/Hora", "Veículo", "Rota", "Unidade", "Tipo Parada", "Funcionário", "Status", "Link Foto", "JSON"]);
        }
        
-       // Salvar fotos no Drive (Opcional - Se houver fotos base64)
        var photoLink = "";
        if (data.photos && data.photos.length > 0) {
           try {
@@ -357,13 +368,15 @@ function doPost(e) {
             var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
             folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
-            var cleanBase64 = data.photos[0].split('base64,')[1] || data.photos[0];
+            var raw = data.photos[0];
+            var cleanBase64 = raw.indexOf('base64,') > -1 ? raw.split('base64,')[1] : raw;
+            
             var blob = Utilities.newBlob(Utilities.base64Decode(cleanBase64), "image/jpeg", data.vehicle + "_" + new Date().getTime() + ".jpg");
             var file = folder.createFile(blob);
             file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
             photoLink = file.getUrl();
           } catch(err) {
-            photoLink = "Erro Foto";
+            photoLink = "Erro Foto: " + err.toString();
           }
        }
 
@@ -836,8 +849,11 @@ function doPost(e) {
                             <HelpCircle className="w-4 h-4"/> Script de Sincronização
                         </h3>
                         <p className="text-xs text-slate-500 mb-2">
-                            Para garantir o funcionamento do sistema, o código abaixo deve estar ativo no seu projeto do Google Apps Script.
+                            Copie o código abaixo para o seu projeto do Google Apps Script.
                         </p>
+                        <div className="p-3 bg-yellow-50 text-yellow-800 text-xs rounded-lg mb-3 border border-yellow-200 font-bold">
+                           ⚠️ IMPLANTAÇÃO: Selecione "Quem pode acessar" = "Qualquer pessoa" (Anyone).
+                        </div>
                         <div className="relative group">
                             <pre className="bg-slate-900 text-slate-50 p-4 rounded-xl text-[10px] font-mono overflow-x-auto whitespace-pre-wrap border border-slate-700 h-64">
                                 {appsScriptCode}

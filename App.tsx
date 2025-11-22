@@ -49,8 +49,13 @@ const App: React.FC = () => {
 
   // Function to fetch data from cloud (Reusable)
   const performCloudSync = async (url: string) => {
-     const cleanUrl = url?.trim();
+     let cleanUrl = url?.trim();
      if (!cleanUrl) return false;
+
+     // Auto-fix common URL mistake: copying the editor link instead of the exec link
+     if (cleanUrl.includes('/edit')) {
+         cleanUrl = cleanUrl.replace(/\/edit.*/, '/exec');
+     }
      
      // Retry logic - Attempt 3 times with slight backoff
      for (let attempt = 0; attempt < 3; attempt++) {
@@ -59,24 +64,14 @@ const App: React.FC = () => {
             const cacheBuster = new Date().getTime();
             
             // Safe URL construction
-            let fetchUrl = cleanUrl;
-            try {
-                const urlObj = new URL(cleanUrl);
-                urlObj.searchParams.set('action', 'read');
-                urlObj.searchParams.set('t', String(cacheBuster));
-                fetchUrl = urlObj.toString();
-            } catch (e) {
-                // Fallback for manual string if URL constructor fails
-                const separator = cleanUrl.includes('?') ? '&' : '?';
-                fetchUrl = `${cleanUrl}${separator}action=read&t=${cacheBuster}`;
-            }
+            const separator = cleanUrl.includes('?') ? '&' : '?';
+            const fetchUrl = `${cleanUrl}${separator}action=read&t=${cacheBuster}`;
 
+            // NOTE: Removed cache: 'no-store' as it sometimes conflicts with CORS redirects in GAS
             const response = await fetch(fetchUrl, {
                 method: 'GET',
-                mode: 'cors',
-                cache: 'no-store', // IMPORTANT: Forces browser to not cache the GAS redirect
+                credentials: 'omit', // CRITICAL: Prevents sending cookies which causes CORS errors with Google Scripts
                 redirect: 'follow',
-                referrerPolicy: 'no-referrer'
             });
             
             if (!response.ok) {
@@ -88,7 +83,11 @@ const App: React.FC = () => {
             // Guard against HTML responses (e.g. Google Sign-in page or Error page)
             if (text.trim().startsWith('<')) {
                  console.warn("Sync received HTML instead of JSON. Likely permission issue.");
-                 throw new Error("Invalid response: Received HTML. Check Script Permissions (Must be 'Anyone').");
+                 // Detect common Google auth page titles
+                 if (text.includes('Google Accounts') || text.includes('Sign in')) {
+                    throw new Error("Erro de Permissão: O Script deve ser implantado como 'Qualquer Pessoa' (Anyone).");
+                 }
+                 throw new Error("Erro no Script: O servidor retornou HTML (erro) ao invés de JSON.");
             }
 
             let cloudData;
@@ -128,7 +127,9 @@ const App: React.FC = () => {
 
          } catch (e) {
             console.warn(`Sync attempt ${attempt + 1} failed:`, e);
-            // If it's a "Failed to fetch" (CORS/Network), it usually fails fast.
+            // If it's a specific error we know, throw immediately
+            if (e instanceof Error && (e.message.includes('Erro de Permissão') || e.message.includes('Erro no Script'))) throw e;
+            
             if (attempt === 2) throw e; 
             await new Promise(resolve => setTimeout(resolve, 2000 * (attempt + 1)));
          }
@@ -174,7 +175,9 @@ const App: React.FC = () => {
       const debouncedSave = setTimeout(async () => {
         setSyncStatus('syncing');
         try {
-          const cleanUrl = url.trim();
+          let cleanUrl = url.trim();
+          if (cleanUrl.includes('/edit')) cleanUrl = cleanUrl.replace(/\/edit.*/, '/exec');
+
           // Prepare state for sync
           const stateToSave = JSON.parse(JSON.stringify(state));
           delete stateToSave.currentUser; // Don't sync session
@@ -237,7 +240,9 @@ const App: React.FC = () => {
       if (!url) return;
       
       try {
-           const cleanUrl = url.trim();
+           let cleanUrl = url.trim();
+           if (cleanUrl.includes('/edit')) cleanUrl = cleanUrl.replace(/\/edit.*/, '/exec');
+
            // Process Photos Compression if needed
            if (payload.photos && payload.photos.length > 0) {
                const compressedPhotos = await Promise.all(
@@ -268,7 +273,9 @@ const App: React.FC = () => {
   const handleTestSettings = async (url: string) => {
       if (!url) return;
       try {
-           const cleanUrl = url.trim();
+           let cleanUrl = url.trim();
+           if (cleanUrl.includes('/edit')) cleanUrl = cleanUrl.replace(/\/edit.*/, '/exec');
+
            const payload = { 
                action: 'log',
                timestamp: new Date().toLocaleString('pt-BR'),

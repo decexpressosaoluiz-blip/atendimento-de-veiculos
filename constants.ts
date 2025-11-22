@@ -2,7 +2,8 @@
 import { Unit, Employee, Vehicle, VehicleStatus, AppState, UserAccount } from './types';
 
 // URL Fixa do Google Apps Script (Deploy Global)
-export const GLOBAL_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxk06K6RNgmxgMO4jYQVByGG7co5G2D5FyTEqWy2ib0c5jFMo1V7MYkfKiskWkNT4TNHw/exec";
+// Deixe vazio para forçar o usuário a configurar manualmente e evitar erros de CORS se a URL antiga morrer
+export const GLOBAL_APPS_SCRIPT_URL = ""; 
 
 export const INITIAL_UNITS: Unit[] = [
   { id: 'u1', name: 'DEC - MATRIZ', location: 'Matriz Administrativa', alarmIntervalMinutes: 60 },
