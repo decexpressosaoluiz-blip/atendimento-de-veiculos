@@ -320,14 +320,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       showToast("Usuário criado.");
   };
 
-  // --- UPDATED APPS SCRIPT CODE WITH AUTO-HEALING v6.0 ---
+  // --- UPDATED APPS SCRIPT CODE v7.0 ---
   const appsScriptCode = `
 /*
-  VERSÃO 6.0 - SÃO LUIZ EXPRESS (CORREÇÃO CRÍTICA DE FOTOS)
+  VERSÃO 7.0 - SÃO LUIZ EXPRESS (PROTEÇÃO DE ERROS DE DRIVE)
   
   ⚠️ IMPORTANTE: 
-  1. Selecione a função 'setup' e clique em Executar para dar permissão.
-  2. Vá em Implantar > Gerenciar > Editar > Nova Versão > Implantar.
+  1. Copie e substitua todo o código no Editor.
+  2. Selecione 'setup' na barra superior e clique em 'Executar'.
+  3. Vá em Implantar > Gerenciar > Editar (Lápis) > Nova Versão > Implantar.
 */
 
 function setup() {
@@ -346,29 +347,35 @@ function ensureFolder() {
       return DriveApp.createFolder(folderName);
     }
   } catch(e) {
-    throw new Error("Erro ao acessar Drive. Verifique se você deu permissão ao script: " + e.toString());
+    // Fallback: Se não puder criar/ler pastas (erro de permissão), tenta apenas registrar sem foto
+    console.error("Erro DRIVE: " + e.toString());
+    return null;
   }
 }
 
 function getDB() {
   var fileName = "DB_SaoLuiz_System";
-  var files = DriveApp.getFilesByName(fileName);
-  if (files.hasNext()) {
-    return SpreadsheetApp.open(files.next());
-  } else {
-    var ss = SpreadsheetApp.create(fileName);
-    var sheet = ss.getSheets()[0];
-    sheet.setName("Logs");
-    sheet.appendRow(["Data/Hora", "Veículo", "Rota", "Unidade", "Tipo", "Funcionário", "Status", "Links Fotos", "JSON Raw"]);
-    return ss;
+  try {
+    var files = DriveApp.getFilesByName(fileName);
+    if (files.hasNext()) {
+      return SpreadsheetApp.open(files.next());
+    } else {
+      var ss = SpreadsheetApp.create(fileName);
+      var sheet = ss.getSheets()[0];
+      sheet.setName("Logs");
+      sheet.appendRow(["Data/Hora", "Veículo", "Rota", "Unidade", "Tipo", "Funcionário", "Status", "Links Fotos", "JSON Raw"]);
+      return ss;
+    }
+  } catch (e) {
+     throw new Error("Erro PLANILHA: " + e.toString());
   }
 }
 
 function doGet(e) {
   return ContentService.createTextOutput(JSON.stringify({
     status: "online",
-    version: "6.0",
-    check: "Se você vê '6.0', a atualização funcionou."
+    version: "7.0",
+    check: "Se você vê '7.0', o servidor atualizou com sucesso."
   })).setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -377,16 +384,15 @@ function doPost(e) {
   lock.tryLock(30000); 
 
   try {
-    var output = { result: "success", version: "6.0" };
+    var output = { result: "success", version: "7.0" };
     
     if (!e || !e.postData || !e.postData.contents) {
-       throw new Error("Nenhum dado recebido (postData vazio)");
+       throw new Error("Nenhum dado recebido");
     }
 
     var jsonString = e.postData.contents;
     var data = JSON.parse(jsonString);
-    var ss;
-    try { ss = getDB(); } catch(dbErr) { throw new Error("Erro ao abrir planilha: " + dbErr.toString()); }
+    var ss = getDB();
     
     if (data.action === 'saveState') {
        var sheet = ss.getSheetByName("DB_State");
@@ -404,9 +410,9 @@ function doPost(e) {
        
        var photoLinks = [];
        if (data.photos && data.photos.length > 0) {
-          try {
-            var folder = ensureFolder();
-            
+          var folder = ensureFolder();
+          
+          if (folder) {
             // Tenta permissão pública (falha silenciosa se não permitido pelo domínio)
             try { folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch(p) {}
             
@@ -430,8 +436,8 @@ function doPost(e) {
                  photoLinks.push("Erro IMG: " + errPhoto.toString());
                }
             }
-          } catch(errFolder) { 
-             photoLinks.push("Erro Pasta: " + errFolder.toString()); 
+          } else {
+             photoLinks.push("Erro: Pasta de Fotos inacessível/permissão negada.");
           }
        }
 
@@ -888,7 +894,7 @@ function doPost(e) {
                                  </div>
                                  {GLOBAL_APPS_SCRIPT_URL && (
                                      <p className="text-[10px] text-green-600 mt-1 ml-1">
-                                         ✓ A URL foi configurada via código.
+                                         ✓ A URL foi configurada via código para o novo link.
                                      </p>
                                  )}
                              </div>
@@ -934,7 +940,7 @@ function doPost(e) {
                  <div className="lg:col-span-6">
                     <Card className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
                         <h3 className="text-sm font-bold uppercase text-slate-500 mb-3 flex items-center gap-2">
-                            <HelpCircle className="w-4 h-4"/> Script de Sincronização (v6.0)
+                            <HelpCircle className="w-4 h-4"/> Script de Sincronização (v7.0)
                         </h3>
                         <p className="text-xs text-slate-500 mb-2">
                             Copie o código abaixo e cole no editor de Script do Google.
