@@ -216,11 +216,12 @@ const App: React.FC = () => {
   };
 
   const handleAddVehicle = (data: { number: string; route: string; stops: TripStop[] }) => {
-    const newVehicle = {
+    const newVehicle: Vehicle = {
       id: `v-${Date.now()}`,
       number: data.number,
       route: data.route,
-      stops: data.stops
+      stops: data.stops,
+      status: VehicleStatus.PENDING // Default status
     };
     setState(prev => ({ ...prev, vehicles: [...prev.vehicles, newVehicle] }));
   };
@@ -230,11 +231,15 @@ const App: React.FC = () => {
   };
 
   const handleCancelVehicle = (id: string) => {
-    // Soft delete
-    setState(prev => ({ ...prev, vehicles: prev.vehicles.filter(v => v.id !== id) }));
+    // Soft delete logic: Update status to CANCELLED instead of removing from array
+    setState(prev => ({ 
+        ...prev, 
+        vehicles: prev.vehicles.map(v => v.id === id ? { ...v, status: VehicleStatus.CANCELLED } : v)
+    }));
   };
 
   const handleDeleteVehicle = (id: string) => {
+    // Hard delete (for administrative cleanup)
     setState(prev => ({
       ...prev,
       vehicles: prev.vehicles.filter(v => v.id !== id),

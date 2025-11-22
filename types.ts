@@ -55,6 +55,7 @@ export interface Vehicle {
   number: string;
   route: string; // Nome da Viagem/Itinerário
   stops: TripStop[]; // Array of stops (Origin -> [Intermediate] -> Destination)
+  status?: VehicleStatus; // Status geral da viagem (ex: CANCELLED)
 }
 
 export interface Justification {
