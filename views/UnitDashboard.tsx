@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { AppState, Vehicle, VehicleStatus, Unit } from '../types';
 import { ServiceModal } from '../components/ServiceModal';
 import { JustificationModal } from '../components/JustificationModal';
-import { VehicleCard } from '../components/VehicleCard'; // Using the updated component
+import { VehicleCard } from '../components/VehicleCard';
 import { AlertOctagon, AlertTriangle, CheckCircle2, Zap, Plus, Save, BellOff, BellRing, Filter } from 'lucide-react';
 import { Button } from '../components/Button';
 
@@ -109,7 +109,7 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
   const [selectedVehicleForService, setSelectedVehicleForService] = useState<Vehicle | null>(null);
   const [selectedVehicleForJustify, setSelectedVehicleForJustify] = useState<Vehicle | null>(null);
   
-  // Filter State - DEFAULT CHANGED TO 'PENDING'
+  // Filter State - DEFAULT IS 'PENDING'
   const [filter, setFilter] = useState<'all' | 'pending' | 'late' | 'done'>('pending');
   const [showNewTripModal, setShowNewTripModal] = useState(false);
   
@@ -168,9 +168,15 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
      const stopB = getStop(b);
      if (!stopA || !stopB) return 0;
      
+     const isLateA = stopA.status === VehicleStatus.PENDING && currentTime > new Date(stopA.eta);
+     const isLateB = stopB.status === VehicleStatus.PENDING && currentTime > new Date(stopB.eta);
+
      // Sorting Logic:
-     // 1. Late vehicles first
-     // 2. Earliest ETA first
+     // 1. Late vehicles FIRST (Urgency)
+     if (isLateA && !isLateB) return -1;
+     if (!isLateA && isLateB) return 1;
+
+     // 2. Then earliest ETA first (FIFO)
      const timeA = new Date(stopA.eta).getTime();
      const timeB = new Date(stopB.eta).getTime();
      return timeA - timeB;
@@ -284,7 +290,7 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
                                 ? 'bg-sle-navy text-white shadow-lg scale-105' 
                                 : 'bg-white dark:bg-slate-900 text-slate-400 border border-slate-100 dark:border-slate-800 hover:bg-slate-50'}`}
                     >
-                        {f === 'all' ? 'Todos' : f === 'pending' ? 'Pendentes (Fila)' : f === 'late' ? 'Atrasados' : 'Concluídos'}
+                        {f === 'all' ? 'Todos' : f === 'pending' ? 'Fila (Pendentes)' : f === 'late' ? 'Atrasados' : 'Concluídos'}
                     </button>
                 ))}
             </div>
@@ -292,13 +298,13 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
 
         {/* Floating Action Button for Add Trip - HIGHLIGHTED */}
         {onAddVehicle && (
-           <div className="fixed bottom-6 right-6 z-50">
+           <div className="fixed bottom-8 right-6 z-50">
               <button 
                   onClick={() => setShowNewTripModal(true)}
-                  className="bg-sle-blue hover:bg-sle-navy text-white w-16 h-16 rounded-full shadow-[0_0_20px_rgba(46,49,180,0.4)] hover:scale-110 hover:shadow-[0_0_30px_rgba(46,49,180,0.6)] transition-all flex items-center justify-center animate-bounce-slow border-4 border-white/20"
+                  className="bg-sle-blue hover:bg-sle-navy text-white w-16 h-16 rounded-full shadow-[0_8px_25px_rgba(46,49,180,0.4)] hover:scale-110 hover:shadow-[0_15px_35px_rgba(46,49,180,0.5)] transition-all duration-300 flex items-center justify-center border-4 border-white/30 active:scale-95"
                   title="Registrar Viagem Extra"
               >
-                  <Plus className="w-8 h-8" />
+                  <Plus className="w-8 h-8" strokeWidth={2.5} />
               </button>
            </div>
         )}

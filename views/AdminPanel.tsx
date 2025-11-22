@@ -165,6 +165,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
      });
 
      // Efficiency = OnTime / (OnTime + All Late)
+     // Ignoring "Pending On Time" as requested
      const efficiency = relevantStops > 0 ? Math.round((completedOnTime / relevantStops) * 100) : 100;
      
      const topEmployees = Object.entries(employeeStats)
@@ -319,18 +320,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       showToast("Usuário criado.");
   };
 
-  // --- UPDATED APPS SCRIPT CODE WITH ROBUST DB HANDLING ---
+  // --- UPDATED APPS SCRIPT CODE WITH MULTI-PHOTO SUPPORT ---
   const appsScriptCode = `
 /*
-  INSTRUÇÕES OBRIGATÓRIAS:
-  1. Cole este código no script.google.com e Salve.
-  2. IMPORTANTE: Clique em 'doGet' acima e em 'Executar' para dar permissão inicial.
-  3. Clique em "Implantar" (Deploy) > "Nova implantação" (New deployment).
-  4. Configure EXATAMENTE assim:
-     - Executar como: "Eu" (Me)
-     - Quem pode acessar: "Qualquer pessoa" (Anyone)
+  ATUALIZAÇÃO DE SCRIPT (FOTOS E BANCO DE DADOS):
   
-  * Se não fizer o passo 4 corretamente, ocorrerá erro de "Failed to fetch".
+  1. Cole este código no script.google.com e Salve.
+  2. Clique em 'doGet' acima e em 'Executar' para dar permissão.
+  3. Clique em "Implantar" (Deploy) > "Nova implantação".
+  4. Selecione "Qualquer pessoa" (Anyone) em "Quem pode acessar".
 */
 
 function getDB() {
@@ -392,26 +390,32 @@ function doPost(e) {
        var sheet = ss.getSheetByName("Logs");
        if (!sheet) { 
          sheet = ss.insertSheet("Logs");
-         sheet.appendRow(["Data/Hora", "Veículo", "Rota", "Unidade", "Tipo Parada", "Funcionário", "Status", "Link Foto", "JSON"]);
+         sheet.appendRow(["Data/Hora", "Veículo", "Rota", "Unidade", "Tipo Parada", "Funcionário", "Status", "Link Foto(s)", "JSON"]);
        }
        
-       var photoLink = "";
+       var photoLinks = [];
        if (data.photos && data.photos.length > 0) {
           try {
             var folderName = "SaoLuiz_Fotos";
             var folders = DriveApp.getFoldersByName(folderName);
             var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
             folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-            var raw = data.photos[0];
-            var cleanBase64 = raw.indexOf('base64,') > -1 ? raw.split('base64,')[1] : raw;
-            var blob = Utilities.newBlob(Utilities.base64Decode(cleanBase64), "image/jpeg", data.vehicle + "_" + new Date().getTime() + ".jpg");
-            var file = folder.createFile(blob);
-            file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-            photoLink = file.getUrl();
-          } catch(err) { photoLink = "Erro Foto: " + err.toString(); }
+            
+            for (var i = 0; i < data.photos.length; i++) {
+               var raw = data.photos[i];
+               var cleanBase64 = raw.indexOf('base64,') > -1 ? raw.split('base64,')[1] : raw;
+               var blob = Utilities.newBlob(Utilities.base64Decode(cleanBase64), "image/jpeg", data.vehicle + "_" + i + "_" + new Date().getTime() + ".jpg");
+               var file = folder.createFile(blob);
+               file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+               photoLinks.push(file.getUrl());
+            }
+          } catch(err) { photoLinks.push("Erro Foto: " + err.toString()); }
        }
 
-       sheet.appendRow([data.timestamp, data.vehicle, data.route, data.unit, data.stopType, data.employee, data.status, photoLink, JSON.stringify(data)]);
+       // Salva todos os links separados por quebra de linha para facilitar o clique
+       var linksString = photoLinks.join("\\n");
+
+       sheet.appendRow([data.timestamp, data.vehicle, data.route, data.unit, data.stopType, data.employee, data.status, linksString, JSON.stringify(data)]);
        output.type = "log_saved";
     }
     return ContentService.createTextOutput(JSON.stringify(output)).setMimeType(ContentService.MimeType.JSON);
