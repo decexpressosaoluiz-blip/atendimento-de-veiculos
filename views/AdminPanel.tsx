@@ -296,49 +296,51 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const appsScriptCode = `
 function doPost(e) {
   var lock = LockService.getScriptLock();
-  lock.tryLock(10000); // Aguarda até 10s por outros processos
+  lock.tryLock(10000);
 
   try {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
     
-    // Cria cabeçalho se estiver vazio
     if (sheet.getLastRow() === 0) {
-      sheet.appendRow(["Data/Hora", "Veículo", "Rota", "Unidade", "Tipo Parada", "Funcionário", "Status", "Imagens (Drive)", "Dados JSON"]);
+      sheet.appendRow(["Data/Hora", "Veículo", "Rota", "Unidade", "Tipo Parada", "Funcionário", "Status", "Link Fotos", "JSON Dados"]);
     }
     
     var data = JSON.parse(e.postData.contents);
     var photoLinks = [];
 
-    // PROCESSAMENTO DE FOTOS (Salva no Google Drive)
+    // --- INTEGRAÇÃO COM GOOGLE DRIVE ---
     if (data.photos && data.photos.length > 0) {
-      // Cria ou busca pasta principal
       var folderName = "SaoLuizExpress_Fotos";
-      var folder;
       var folders = DriveApp.getFoldersByName(folderName);
+      var folder;
+      
       if (folders.hasNext()) {
         folder = folders.next();
       } else {
         folder = DriveApp.createFolder(folderName);
+        folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       }
 
-      // Salva cada foto
       data.photos.forEach(function(photoBase64, index) {
         try {
-           // Remove header se existir (ex: data:image/jpeg;base64,)
+           // Limpa cabeçalho base64 se existir
            var cleanBase64 = photoBase64;
            if (photoBase64.indexOf('base64,') > -1) {
              cleanBase64 = photoBase64.split('base64,')[1];
            }
            
            var decoded = Utilities.base64Decode(cleanBase64);
-           var fileName = data.vehicle + "_" + data.unit + "_" + index + "_" + new Date().getTime() + ".jpg";
+           var timestamp = new Date().getTime();
+           var fileName = data.vehicle + "_" + data.unit + "_" + index + "_" + timestamp + ".jpg";
            var blob = Utilities.newBlob(decoded, "image/jpeg", fileName);
            
            var file = folder.createFile(blob);
            file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+           
+           // Obtém link de visualização direta
            photoLinks.push(file.getUrl());
         } catch (err) {
-           photoLinks.push("Erro foto " + index);
+           photoLinks.push("Erro ao salvar foto " + index + ": " + err.toString());
         }
       });
     }
@@ -351,13 +353,16 @@ function doPost(e) {
       data.stopType,
       data.employee,
       data.status,
-      photoLinks.join("\\n"), // Quebra de linha na célula se houver várias
+      photoLinks.join("\\n"), // Links separados por quebra de linha
       JSON.stringify(data)
     ]);
   
-    return ContentService.createTextOutput(JSON.stringify({"result":"success", "photosSaved": photoLinks.length})).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({"result":"success", "savedPhotos": photoLinks.length}))
+      .setMimeType(ContentService.MimeType.JSON);
+      
   } catch(e) {
-    return ContentService.createTextOutput(JSON.stringify({"result":"error", "error": e.toString()})).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({"result":"error", "error": e.toString()}))
+      .setMimeType(ContentService.MimeType.JSON);
   } finally {
     lock.releaseLock();
   }
@@ -800,7 +805,7 @@ function doPost(e) {
                         </p>
                         <ol className="list-decimal list-inside text-xs space-y-1 text-slate-700 dark:text-slate-300 mb-4">
                             <li>Copie o código abaixo e substitua TUDO no Apps Script.</li>
-                            <li>Clique em <b>Implantar {'>'} Gerenciar implantações</b>.</li>
+                            <li>Clique em <b>Implantar &gt; Gerenciar implantações</b>.</li>
                             <li>Clique no Lápis (Editar).</li>
                             <li>Mude a Versão para <b>"Nova versão"</b> (CRUCIAL!).</li>
                             <li>Clique em Implantar e use a nova URL.</li>

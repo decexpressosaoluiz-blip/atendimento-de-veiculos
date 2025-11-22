@@ -106,14 +106,17 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
     setZoom(1);
 
     try {
-      // Optimization: Use 720p. Easier for mobile browsers to handle continuously without asking permissions repeatedly due to memory pressure
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
+      // Optimization: Requesting standard 720p is more likely to be remembered by browser as "Safe" 
+      // and requires less memory, preventing tab reloading on mobile.
+      const constraints = {
+        video: {
           facingMode: mode,
-          width: { ideal: 1280 }, 
+          width: { ideal: 1280 },
           height: { ideal: 720 }
-        } 
-      });
+        }
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
       
       // Save preference on success

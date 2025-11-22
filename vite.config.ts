@@ -14,14 +14,14 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          // Separa libs fundamentais do React
+          // Core Libraries
           vendor: ['react', 'react-dom', 'react-router-dom'],
-          // Separa Recharts que é pesado
-          charts: ['recharts'],
-          // Separa o SDK do Google GenAI que é muito pesado
+          // UI Libs
+          ui: ['lucide-react'],
+          // Heavy AI Lib
           ai: ['@google/genai'],
-          // Separa ícones
-          icons: ['lucide-react']
+          // Charts
+          charts: ['recharts']
         }
       }
     }
