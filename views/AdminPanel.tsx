@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { AppState, JustificationStatus, Employee, Vehicle, VehicleStatus, UserAccount } from '../types';
 import { Card } from '../components/Card';
@@ -292,29 +293,36 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       showToast("Usuário criado.");
   };
 
-  // --- UPDATED APPS SCRIPT CODE WITH SYNC AND IMAGE LOGGING ---
+  // --- UPDATED APPS SCRIPT CODE WITH ROBUST DB HANDLING ---
   const appsScriptCode = `
-// --- SÃO LUIZ EXPRESS: SCRIPT DE SINCRONIZAÇÃO V3 (STANDALONE SUPPORT) ---
+// --- SÃO LUIZ EXPRESS: SCRIPT DE SINCRONIZAÇÃO V4 (ROBUST STANDALONE) ---
 // IMPLANTAÇÃO: 
 // 1. Publique como Web App
 // 2. Execute como: "Eu" (Me)
 // 3. Quem pode acessar: "Qualquer pessoa" (Anyone)
+// 4. EXECUTE A FUNÇÃO 'doGet' UMA VEZ NO EDITOR PARA AUTORIZAR O DRIVE/PLANILHA
 
-// Helper para obter a planilha (funciona se for Script Vinculado ou Solto)
 function getDB() {
   var ss;
   try {
+    // Tenta pegar a planilha ativa (funciona se o script estiver vinculado)
     ss = SpreadsheetApp.getActiveSpreadsheet();
-  } catch(e) {}
+  } catch(e) {
+    // Ignora erro se não estiver vinculado
+  }
   
   if (!ss) {
-    // Tenta encontrar pelo nome ou cria nova
-    var files = DriveApp.getFilesByName("DB_SaoLuiz_System");
-    if (files.hasNext()) {
-      var file = files.next();
-      ss = SpreadsheetApp.openById(file.getId());
-    } else {
-      ss = SpreadsheetApp.create("DB_SaoLuiz_System");
+    // Modo Standalone: Procura arquivo pelo nome ou cria um novo
+    try {
+      var fileName = "DB_SaoLuiz_System";
+      var files = DriveApp.getFilesByName(fileName);
+      if (files.hasNext()) {
+        ss = SpreadsheetApp.open(files.next());
+      } else {
+        ss = SpreadsheetApp.create(fileName);
+      }
+    } catch (e) {
+      throw new Error("Erro ao acessar Drive. Verifique se você autorizou o script: " + e.toString());
     }
   }
   return ss;
@@ -333,6 +341,7 @@ function doGet(e) {
     if (!data || data === "") data = "{}";
     return ContentService.createTextOutput(data).setMimeType(ContentService.MimeType.JSON);
   } catch(e) {
+    // Retorna JSON de erro em vez de HTML para evitar CORS error
     return ContentService.createTextOutput(JSON.stringify({error: e.toString()})).setMimeType(ContentService.MimeType.JSON);
   } finally {
     lock.releaseLock();
@@ -852,7 +861,7 @@ function doPost(e) {
                             Copie o código abaixo para o seu projeto do Google Apps Script.
                         </p>
                         <div className="p-3 bg-yellow-50 text-yellow-800 text-xs rounded-lg mb-3 border border-yellow-200 font-bold">
-                           ⚠️ IMPLANTAÇÃO: Selecione "Quem pode acessar" = "Qualquer pessoa" (Anyone).
+                           ⚠️ IMPORTANTE: Publique como Web App (Executar como: EU / Acesso: QUALQUER PESSOA).
                         </div>
                         <div className="relative group">
                             <pre className="bg-slate-900 text-slate-50 p-4 rounded-xl text-[10px] font-mono overflow-x-auto whitespace-pre-wrap border border-slate-700 h-64">

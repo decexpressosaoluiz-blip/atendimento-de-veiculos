@@ -1,8 +1,7 @@
 
 import { Unit, Employee, Vehicle, VehicleStatus, AppState, UserAccount } from './types';
 
-// URL Fixa do Google Apps Script (Deploy Global)
-// Deixe vazio para forçar o usuário a configurar manualmente e evitar erros de CORS se a URL antiga morrer
+// URL Fixa do Google Apps Script (Deixe vazio para configurar via UI)
 export const GLOBAL_APPS_SCRIPT_URL = ""; 
 
 export const INITIAL_UNITS: Unit[] = [

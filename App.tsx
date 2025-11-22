@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppState, VehicleStatus, JustificationStatus, Employee, Vehicle, UserAccount, TripStop } from './types';
@@ -72,6 +73,7 @@ const App: React.FC = () => {
                 method: 'GET',
                 credentials: 'omit', // CRITICAL: Prevents sending cookies which causes CORS errors with Google Scripts
                 redirect: 'follow',
+                mode: 'cors'
             });
             
             if (!response.ok) {
@@ -86,6 +88,9 @@ const App: React.FC = () => {
                  // Detect common Google auth page titles
                  if (text.includes('Google Accounts') || text.includes('Sign in')) {
                     throw new Error("Erro de Permissão: O Script deve ser implantado como 'Qualquer Pessoa' (Anyone).");
+                 }
+                 if (text.includes('Error')) {
+                     throw new Error("Erro Interno do Script Google. Verifique os logs do Apps Script.");
                  }
                  throw new Error("Erro no Script: O servidor retornou HTML (erro) ao invés de JSON.");
             }

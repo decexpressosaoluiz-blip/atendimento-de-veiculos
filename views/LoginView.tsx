@@ -46,8 +46,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, onSyncUrl 
 
   const handleSyncSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!syncUrl.includes('script.google.com')) {
-          setSyncMessage({ text: "URL inválida. Deve ser um link do Google Apps Script.", type: 'error' });
+      const cleanUrl = syncUrl.trim();
+
+      if (!cleanUrl.startsWith('http')) {
+          setSyncMessage({ text: "URL inválida. Certifique-se de copiar o link completo (https://...)", type: 'error' });
           return;
       }
 
@@ -55,14 +57,15 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, onSyncUrl 
       setSyncMessage(null);
 
       try {
-          await onSyncUrl(syncUrl);
+          await onSyncUrl(cleanUrl);
           setSyncMessage({ text: "Sincronização concluída! Dados baixados com sucesso.", type: 'success' });
           setTimeout(() => {
               setShowSyncModal(false);
               setSyncMessage(null);
           }, 2000);
-      } catch (err) {
-          setSyncMessage({ text: "Falha ao conectar. Verifique a URL e sua internet.", type: 'error' });
+      } catch (err: any) {
+          console.error("Sync error details:", err);
+          setSyncMessage({ text: `Erro: ${err.message || "Falha de conexão"}`, type: 'error' });
       } finally {
           setIsSyncing(false);
       }
