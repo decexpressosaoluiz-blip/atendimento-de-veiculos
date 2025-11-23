@@ -328,6 +328,7 @@ const AdminPanelInternal: React.FC<AdminPanelProps & { updateGlobalState: (s: Ap
       if (routeForm.selectedUnits.length < 2) return;
       setRouteForm(prev => ({ ...prev, isCalculating: true }));
 
+      // FIX: Explicitly type the segments array to avoid implicit any error
       const segments: RouteSegment[] = [];
       let totalTime = 0;
       let totalDist = 0;
