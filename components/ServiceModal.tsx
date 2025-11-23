@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Vehicle, Employee } from '../types';
 import { Camera, X, Trash2, UserCheck, CheckCircle2, ImagePlus, RefreshCw, Smartphone, Loader2, ZoomIn, AlertTriangle, UserX } from 'lucide-react';
@@ -24,7 +25,16 @@ interface PhotoAnalysis {
 }
 
 export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, onConfirm, onClose }) => {
-  const [selectedEmployee, setSelectedEmployee] = useState('');
+  // Smart selection: load last used employee for this device
+  const [selectedEmployee, setSelectedEmployee] = useState(() => {
+      const lastUsed = getPreference('lastUsedEmployeeId', '');
+      // Verify if the stored employee still exists in the current list
+      if (employees.find(e => e.id === lastUsed)) {
+          return lastUsed;
+      }
+      return '';
+  });
+
   const [photos, setPhotos] = useState<string[]>([]);
   const [photoAnalyses, setPhotoAnalyses] = useState<Record<number, PhotoAnalysis>>({});
   
@@ -218,6 +228,9 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
   const handleConfirmService = async () => {
     if (!selectedEmployee || photos.length === 0) return;
 
+    // Save user preference for next time
+    savePreference('lastUsedEmployeeId', selectedEmployee);
+
     setIsSaving(true);
     setIsSuccess(true);
     await new Promise(resolve => setTimeout(resolve, 1500));
@@ -259,7 +272,10 @@ export const ServiceModal: React.FC<ServiceModalProps> = ({ vehicle, employees, 
           {/* 1. Employee Selection */}
           {!isCameraOpen && (
             <section>
-              <label className="text-sm font-bold text-sle-navy uppercase tracking-wider mb-3 block">1. Quem está atendendo?</label>
+              <label className="text-sm font-bold text-sle-navy uppercase tracking-wider mb-3 flex justify-between">
+                  <span>1. Quem está atendendo?</span>
+                  {selectedEmployee && <span className="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">Seleção Automática</span>}
+              </label>
               {employees.length === 0 ? (
                 <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl p-6 flex flex-col items-center justify-center text-center">
                    <UserX className="w-8 h-8 text-slate-300 mb-2" />

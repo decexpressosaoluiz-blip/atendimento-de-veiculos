@@ -1,10 +1,11 @@
 
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useRef } from 'react';
 import { AppState, Vehicle, VehicleStatus, Unit } from '../types';
 import { ServiceModal } from '../components/ServiceModal';
 import { JustificationModal } from '../components/JustificationModal';
 import { VehicleCard } from '../components/VehicleCard';
-import { AlertOctagon, AlertTriangle, CheckCircle2, Zap, Plus, Save, BellOff, BellRing, Filter } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, CheckCircle2, Zap, Plus, Save, BellOff, BellRing, Filter, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '../components/Button';
 
 interface UnitDashboardProps {
@@ -113,8 +114,10 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
   const [filter, setFilter] = useState<'all' | 'pending' | 'late' | 'done'>('pending');
   const [showNewTripModal, setShowNewTripModal] = useState(false);
   
-  // Local state for silenced alarms (session based)
+  // Audio & Alarm State
   const [silencedAlarms, setSilencedAlarms] = useState<string[]>([]);
+  const [isMuted, setIsMuted] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   
   const currentUnitId = state.currentUser?.unitId || '';
   const unitConfig = state.units.find(u => u.id === currentUnitId);
@@ -183,7 +186,7 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
   });
 
   // --- ALARM LOGIC ---
-  const CRITICAL_DELAY_MINUTES = 30;
+  const CRITICAL_DELAY_MINUTES = 1; // Warning trigger starts immediately when late for demo purposes
   const criticalVehicles = visibleVehicles.filter(v => {
       const stop = getStop(v);
       if (!stop || stop.status !== VehicleStatus.PENDING) return false;
@@ -191,8 +194,25 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
       const diffMs = currentTime.getTime() - new Date(stop.eta).getTime();
       const diffMinutes = Math.floor(diffMs / 60000);
       
-      return diffMinutes > CRITICAL_DELAY_MINUTES && !silencedAlarms.includes(v.id);
+      return diffMinutes >= 1 && !silencedAlarms.includes(v.id);
   });
+
+  // Audio Alert Effect
+  useEffect(() => {
+      if (criticalVehicles.length > 0 && !isMuted) {
+          if (!audioRef.current) {
+              audioRef.current = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+              audioRef.current.volume = 0.5;
+          }
+          
+          const playPromise = audioRef.current.play();
+          if (playPromise !== undefined) {
+              playPromise.catch(error => {
+                  console.log("Audio playback prevented by browser interaction policy.");
+              });
+          }
+      }
+  }, [criticalVehicles.length, isMuted]);
 
   const toggleSilence = (id: string) => {
       if (silencedAlarms.includes(id)) {
@@ -226,21 +246,29 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
                           <BellRing className="w-5 h-5" />
                       </div>
                       <div>
-                          <p className="font-bold text-sm">Atenção: {criticalVehicles.length} Veículo(s) com Atraso Crítico</p>
-                          <p className="text-xs text-white/80">Mais de 30 minutos sem justificativa.</p>
+                          <p className="font-bold text-sm">Atenção: {criticalVehicles.length} Veículo(s) com Atraso</p>
+                          <p className="text-xs text-white/80">Justifique o atraso ou finalize o atendimento.</p>
                       </div>
                   </div>
+                  <button onClick={() => setIsMuted(!isMuted)} className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors">
+                      {isMuted ? <VolumeX className="w-5 h-5"/> : <Volume2 className="w-5 h-5"/>}
+                  </button>
               </div>
               <div className="container mx-auto max-w-2xl mt-3 space-y-2">
                   {criticalVehicles.map(v => (
                       <div key={v.id} className="bg-white/10 rounded-lg p-2 flex items-center justify-between">
                           <span className="font-bold text-sm px-2">{v.number}</span>
-                          <button 
-                             onClick={() => toggleSilence(v.id)}
-                             className="bg-white/20 hover:bg-white/30 px-3 py-1 rounded text-xs font-bold flex items-center gap-1 transition-colors"
-                          >
-                              <BellOff className="w-3 h-3" /> Silenciar
-                          </button>
+                          <div className="flex gap-2">
+                             <button onClick={() => setSelectedVehicleForJustify(v)} className="bg-yellow-500/80 hover:bg-yellow-500 text-white px-3 py-1 rounded text-xs font-bold flex items-center gap-1 transition-colors">
+                                 Justificar
+                             </button>
+                             <button 
+                                onClick={() => toggleSilence(v.id)}
+                                className="bg-white/20 hover:bg-white/30 px-3 py-1 rounded text-xs font-bold flex items-center gap-1 transition-colors"
+                             >
+                                 <BellOff className="w-3 h-3" /> Silenciar
+                             </button>
+                          </div>
                       </div>
                   ))}
               </div>
@@ -254,8 +282,11 @@ export const UnitDashboard: React.FC<UnitDashboardProps> = ({ state, onServiceVe
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Operação</p>
             <h2 className="text-xl font-bold text-sle-navy dark:text-white leading-none">{unitConfig?.name}</h2>
           </div>
-          <div className="bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">
+          <div className="bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full flex items-center gap-2">
              <span className="text-xs font-mono font-bold text-slate-600 dark:text-slate-300">{currentTime.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}</span>
+             <button onClick={() => setIsMuted(!isMuted)} className="text-slate-400 hover:text-sle-blue">
+                 {isMuted ? <VolumeX className="w-3 h-3"/> : <Volume2 className="w-3 h-3"/>}
+             </button>
           </div>
         </div>
 

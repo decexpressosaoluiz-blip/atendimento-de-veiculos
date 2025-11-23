@@ -5,7 +5,7 @@ import { AppState, JustificationStatus, Employee, Vehicle, VehicleStatus, UserAc
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
-import { Check, X, Download, Plus, Truck, Users, Key, Edit, Save, Trash2, Link, Map, ArrowRight, MapPin, Upload, Copy, HelpCircle, FileJson, Zap, Lightbulb, TrendingUp, AlertTriangle, Lock, Calendar, Filter, CheckCircle2, Search, Route as RouteIcon, Clock, Navigation, MapPinned } from 'lucide-react';
+import { Check, X, Download, Plus, Truck, Users, Key, Edit, Save, Trash2, Link, Map, ArrowRight, MapPin, Upload, Copy, HelpCircle, FileJson, Zap, Lightbulb, TrendingUp, AlertTriangle, Lock, Calendar, Filter, CheckCircle2, Search, Route as RouteIcon, Clock, Navigation, MapPinned, ArrowDown } from 'lucide-react';
 import { GLOBAL_APPS_SCRIPT_URL } from '../constants';
 import { findLocationWithAI, calculateRouteLogistics } from '../services/geminiService';
 import { Sparkles } from 'lucide-react';
@@ -425,7 +425,8 @@ const AdminPanelInternal: React.FC<AdminPanelProps & { updateGlobalState: (s: Ap
                     const segment = template.segments.find(s => s.fromUnitId === template.unitSequence[index-1] && s.toUnitId === unitId);
                     if (segment) {
                         currentEta = new Date(currentEta.getTime() + segment.durationMinutes * 60000);
-                        // Add some service buffer (e.g. 30 mins)
+                        // Add some service buffer (e.g. 30 mins) for handling
+                        // Note: Real logistics might make this buffer configurable
                         currentEta = new Date(currentEta.getTime() + 30 * 60000); 
                     }
                 }
@@ -703,150 +704,188 @@ const AdminPanelInternal: React.FC<AdminPanelProps & { updateGlobalState: (s: Ap
              </div>
          )}
 
-         {/* ROUTES TAB (NEW) */}
+         {/* ROUTES TAB (REFACTORED LAYOUT) */}
          {activeTab === 'routes' && (
-             <div className="space-y-6 animate-in fade-in">
+             <div className="space-y-8 animate-in fade-in">
+                 {/* Top Section: Route Definition */}
                  <Card>
-                     <h3 className="font-bold text-lg mb-4 text-sle-navy flex items-center gap-2"><RouteIcon className="w-5 h-5"/> Criador de Rotas Inteligente</h3>
-                     <p className="text-sm text-slate-500 mb-6">Selecione as unidades na ordem de passagem. Caso o veículo precise passar por cidades ou rodovias específicas fora das unidades, preencha o campo "Via / Ponto de Referência".</p>
+                     <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
+                        <div className="bg-sle-blue/10 p-2 rounded-lg text-sle-blue">
+                            <RouteIcon className="w-6 h-6"/> 
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-xl text-sle-navy">Criador de Rotas Inteligente</h3>
+                            <p className="text-sm text-slate-500">Defina a sequência de unidades. O sistema calculará automaticamente a logística.</p>
+                        </div>
+                     </div>
                      
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                         <div className="space-y-4">
+                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                         <div className="md:col-span-1 space-y-4">
                              <div>
                                  <label className={labelClassName}>Nome da Rota</label>
                                  <input className={inputClassName} value={routeForm.name} onChange={e=>setRouteForm({...routeForm, name: e.target.value})} placeholder="Ex: Rota Sul (Goiânia -> Itumbiara)" />
                              </div>
                              
-                             <div>
-                                 <label className={labelClassName}>Adicionar Unidade ao Trajeto</label>
-                                 <div className="flex flex-wrap gap-2 mb-2">
+                             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                 <label className={labelClassName}>Adicionar Unidades (Clique na ordem)</label>
+                                 <div className="flex flex-wrap gap-2 mt-2">
                                      {state.units.map(u => (
                                          <button 
                                             key={u.id} 
                                             onClick={() => setRouteForm(prev => ({...prev, selectedUnits: [...prev.selectedUnits, u.id]}))}
-                                            className="px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-600 transition-colors border border-slate-200"
+                                            className="px-3 py-2 rounded-lg bg-white hover:bg-blue-50 hover:border-sle-blue text-xs font-bold text-slate-600 transition-all border border-slate-200 shadow-sm flex items-center gap-2"
                                          >
-                                             + {u.name}
+                                             <Plus className="w-3 h-3 text-slate-400" />
+                                             {u.name}
                                          </button>
                                      ))}
                                  </div>
-                                 
-                                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 min-h-[100px]">
-                                     {routeForm.selectedUnits.length === 0 ? (
-                                         <p className="text-center text-slate-400 text-xs mt-4">Nenhuma unidade selecionada.</p>
-                                     ) : (
-                                         <div className="flex flex-col gap-2">
-                                             {routeForm.selectedUnits.map((uid, idx) => {
-                                                 // Logic for Waypoints (Between nodes)
-                                                 const isFirst = idx === 0;
-                                                 const prevUid = !isFirst ? routeForm.selectedUnits[idx-1] : null;
-                                                 const waypointKey = prevUid ? `${prevUid}-${uid}` : null;
-
-                                                 return (
-                                                     <React.Fragment key={idx}>
-                                                         {!isFirst && waypointKey && (
-                                                             <div className="flex items-center justify-center py-1">
-                                                                 <div className="bg-slate-200 w-0.5 h-4"></div>
-                                                                 <div className="relative w-full px-8">
-                                                                     <input 
-                                                                        type="text"
-                                                                        placeholder="Via / Ponto de Referência (Opcional)"
-                                                                        className="w-full text-xs bg-yellow-50 border border-yellow-200 rounded px-2 py-1 text-center text-slate-600 placeholder:text-slate-300 focus:ring-1 focus:ring-yellow-400 outline-none"
-                                                                        value={routeForm.segmentWaypoints[waypointKey] || ''}
-                                                                        onChange={(e) => handleWaypointChange(idx, e.target.value)}
-                                                                     />
-                                                                     <MapPinned className="w-3 h-3 text-yellow-500 absolute left-10 top-1.5" />
-                                                                 </div>
-                                                             </div>
-                                                         )}
-
-                                                         <div className="flex items-center gap-3 animate-in slide-in-from-left-2">
-                                                             <div className="bg-sle-blue text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shadow-sm">{idx + 1}</div>
-                                                             <div className="flex-1 bg-white border border-slate-200 p-2 rounded-lg text-sm font-medium flex justify-between">
-                                                                 {state.units.find(u => u.id === uid)?.name}
-                                                                 <button onClick={() => setRouteForm(prev => ({...prev, selectedUnits: prev.selectedUnits.filter((_, i) => i !== idx)}))} className="text-red-400 hover:text-red-600"><X className="w-3 h-3"/></button>
-                                                             </div>
-                                                         </div>
-                                                     </React.Fragment>
-                                                 );
-                                             })}
-                                         </div>
-                                     )}
-                                 </div>
                              </div>
-
-                             <Button onClick={handleCalculateRoute} isLoading={routeForm.isCalculating} disabled={routeForm.selectedUnits.length < 2} className="w-full" variant="secondary" icon={<Zap className="w-4 h-4 text-yellow-500"/>}>Calcular Tempos e Distâncias (IA)</Button>
                          </div>
 
-                         <div className="bg-slate-50 rounded-xl border border-slate-200 p-6 flex flex-col justify-between">
-                             {routeForm.calculatedSegments.length > 0 ? (
-                                 <div className="space-y-4">
-                                     <h4 className="font-bold text-sle-navy border-b border-slate-200 pb-2">Resumo da Rota</h4>
-                                     <div className="flex gap-4">
-                                         <div className="bg-white p-3 rounded-lg shadow-sm border border-slate-100 flex-1">
-                                             <span className="text-xs text-slate-400 uppercase font-bold">Tempo Total</span>
-                                             <p className="text-xl font-bold text-sle-blue">{(routeForm.totalTime / 60).toFixed(1)}h <span className="text-sm text-slate-400">({routeForm.totalTime} min)</span></p>
-                                         </div>
-                                         <div className="bg-white p-3 rounded-lg shadow-sm border border-slate-100 flex-1">
-                                             <span className="text-xs text-slate-400 uppercase font-bold">Distância</span>
-                                             <p className="text-xl font-bold text-sle-blue">{routeForm.totalDist} <span className="text-sm text-slate-400">km</span></p>
-                                         </div>
+                         {/* Expanded Waypoint/Map Area */}
+                         <div className="md:col-span-2 space-y-4">
+                             <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 min-h-[200px] flex flex-col justify-start relative overflow-hidden">
+                                 <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none"><MapPinned className="w-32 h-32 text-slate-400"/></div>
+                                 
+                                 {routeForm.selectedUnits.length === 0 ? (
+                                     <div className="flex flex-col items-center justify-center h-40 text-slate-400 z-10">
+                                         <Navigation className="w-10 h-10 mb-2 opacity-30"/>
+                                         <p className="text-sm text-center font-medium">O mapa da rota está vazio.</p>
+                                         <p className="text-xs text-center opacity-70">Adicione unidades à esquerda para começar.</p>
                                      </div>
-                                     <div className="space-y-2 mt-4">
-                                         <p className="text-xs font-bold uppercase text-slate-400">Segmentos:</p>
-                                         {routeForm.calculatedSegments.map((seg, i) => (
-                                             <div key={i} className="text-xs flex flex-col bg-white p-2 rounded border border-slate-100 gap-1">
-                                                 <div className="flex justify-between items-center">
-                                                     <span>{state.units.find(u=>u.id===seg.fromUnitId)?.name} → {state.units.find(u=>u.id===seg.toUnitId)?.name}</span>
-                                                     <span className="font-mono font-bold text-slate-600">{seg.durationMinutes} min / {seg.distanceKm} km</span>
-                                                 </div>
-                                                 {seg.waypoints && (
-                                                     <div className="text-[10px] text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded w-fit flex items-center gap-1">
-                                                         <MapPinned className="w-3 h-3" /> Via: {seg.waypoints}
+                                 ) : (
+                                     <div className="relative z-10 space-y-0">
+                                         {routeForm.selectedUnits.map((uid, idx) => {
+                                             const isLast = idx === routeForm.selectedUnits.length - 1;
+                                             // Waypoint logic
+                                             const prevUid = idx > 0 ? routeForm.selectedUnits[idx-1] : null;
+                                             const waypointKey = prevUid ? `${prevUid}-${uid}` : null;
+
+                                             return (
+                                                 <div key={idx} className="flex flex-col animate-in slide-in-from-top-2">
+                                                     
+                                                     {/* Waypoint Input Area (Connector) */}
+                                                     {idx > 0 && waypointKey && (
+                                                         <div className="flex ml-6 border-l-2 border-dashed border-slate-300 pl-8 py-4 relative group">
+                                                            <div className="absolute -left-[9px] top-1/2 -translate-y-1/2 w-4 h-4 bg-slate-200 rounded-full border-2 border-white"></div>
+                                                            
+                                                            <div className="w-full max-w-md">
+                                                                <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
+                                                                    <MapPinned className="w-3 h-3"/> Via / Ponto de Referência (Opcional)
+                                                                </label>
+                                                                <input 
+                                                                    type="text"
+                                                                    placeholder="Ex: Passando por BR-153, Posto X..."
+                                                                    className="w-full text-sm bg-yellow-50/50 border border-yellow-200 rounded-lg px-3 py-2 text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:ring-yellow-400 focus:bg-white outline-none transition-all"
+                                                                    value={routeForm.segmentWaypoints[waypointKey] || ''}
+                                                                    onChange={(e) => handleWaypointChange(idx, e.target.value)}
+                                                                />
+                                                            </div>
+                                                         </div>
+                                                     )}
+
+                                                     {/* Unit Node */}
+                                                     <div className="flex items-center gap-4 group">
+                                                         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-lg font-bold shadow-md z-10 transition-transform group-hover:scale-110 ${idx === 0 ? 'bg-green-500 text-white' : isLast ? 'bg-red-500 text-white' : 'bg-white border-2 border-sle-blue text-sle-blue'}`}>
+                                                             {idx + 1}
+                                                         </div>
+                                                         <div className="flex-1 bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">
+                                                             <div>
+                                                                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{idx === 0 ? 'Origem' : isLast ? 'Destino' : 'Parada'}</span>
+                                                                 <h4 className="font-bold text-sle-navy text-lg">{state.units.find(u => u.id === uid)?.name}</h4>
+                                                             </div>
+                                                             <button onClick={() => setRouteForm(prev => ({...prev, selectedUnits: prev.selectedUnits.filter((_, i) => i !== idx)}))} className="p-2 hover:bg-red-50 text-red-400 hover:text-red-600 rounded-lg transition-colors"><Trash2 className="w-5 h-5"/></button>
+                                                         </div>
                                                      </div>
-                                                 )}
-                                             </div>
-                                         ))}
+                                                 </div>
+                                             );
+                                         })}
                                      </div>
-                                     <Button onClick={handleSaveRoute} className="w-full mt-4" icon={<Save className="w-4 h-4"/>}>Salvar Rota</Button>
-                                 </div>
-                             ) : (
-                                 <div className="flex flex-col items-center justify-center h-full text-slate-400">
-                                     <Navigation className="w-12 h-12 mb-2 opacity-20"/>
-                                     <p className="text-sm text-center">Configure a sequência e clique em Calcular.<br/><span className="text-xs opacity-70">Use "Via" para forçar caminhos específicos.</span></p>
-                                 </div>
-                             )}
+                                 )}
+                             </div>
+
+                             <div className="flex gap-4 pt-2">
+                                <Button onClick={handleCalculateRoute} isLoading={routeForm.isCalculating} disabled={routeForm.selectedUnits.length < 2} className="flex-1 h-12 text-base shadow-lg" variant="secondary" icon={<Zap className="w-5 h-5 text-yellow-500"/>}>
+                                    Calcular Logística (IA)
+                                </Button>
+                                {routeForm.calculatedSegments.length > 0 && (
+                                    <Button onClick={handleSaveRoute} className="flex-1 h-12 text-base shadow-lg bg-green-600 hover:bg-green-700" icon={<Save className="w-5 h-5"/>}>
+                                        Salvar Rota
+                                    </Button>
+                                )}
+                             </div>
                          </div>
                      </div>
                  </Card>
 
-                 {/* List of Routes */}
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     {(state.routes || []).map(route => (
-                         <Card key={route.id} className="relative group hover:border-sle-blue transition-colors">
-                             <div className="flex justify-between items-start mb-3">
-                                 <div>
-                                     <h4 className="font-bold text-lg text-sle-navy">{route.name}</h4>
-                                     <p className="text-xs text-slate-500 font-mono">{route.unitSequence.length} Paradas • {route.totalDistanceKm} km • {(route.totalDurationMinutes/60).toFixed(1)} horas</p>
-                                 </div>
-                                 <button onClick={() => setDeleteTarget({ type: 'route', id: route.id })} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity"><Trash2 className="w-4 h-4"/></button>
-                             </div>
-                             <div className="flex items-center gap-1 text-xs text-slate-600 flex-wrap">
-                                 {route.unitSequence.map((uid, i) => {
-                                     const segment = i > 0 ? route.segments.find(s => s.fromUnitId === route.unitSequence[i-1] && s.toUnitId === uid) : null;
-                                     return (
-                                         <React.Fragment key={i}>
-                                             {i > 0 && <div className="flex flex-col items-center px-1">
-                                                 <ArrowRight className="w-3 h-3 text-slate-300"/>
-                                                 {segment?.waypoints && <span className="text-[9px] text-yellow-600 bg-yellow-50 px-1 rounded border border-yellow-100 max-w-[60px] truncate" title={`Via: ${segment.waypoints}`}>via...</span>}
-                                             </div>}
-                                             <span className="bg-slate-100 px-2 py-1 rounded">{state.units.find(u => u.id === uid)?.name}</span>
-                                         </React.Fragment>
-                                     );
-                                 })}
-                             </div>
+                 {/* Results Section (Only shows after calc) */}
+                 {routeForm.calculatedSegments.length > 0 && (
+                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-in slide-in-from-bottom-4">
+                         <Card className="bg-sle-blue text-white border-none">
+                             <span className="opacity-70 text-xs font-bold uppercase">Tempo Total Estimado</span>
+                             <p className="text-3xl font-bold mt-1">{(routeForm.totalTime / 60).toFixed(1)}h</p>
+                             <p className="text-sm opacity-80">{routeForm.totalTime} minutos</p>
                          </Card>
-                     ))}
+                         <Card className="bg-slate-800 text-white border-none">
+                             <span className="opacity-70 text-xs font-bold uppercase">Distância Total</span>
+                             <p className="text-3xl font-bold mt-1">{routeForm.totalDist} km</p>
+                         </Card>
+                         {routeForm.calculatedSegments.map((seg, i) => (
+                             <Card key={i} className="border-l-4 border-l-yellow-400">
+                                 <span className="text-xs text-slate-400 font-bold uppercase">Trecho {i+1}</span>
+                                 <div className="flex items-center gap-2 mt-1 text-sm font-bold text-sle-navy">
+                                    <span className="truncate max-w-[80px]">{state.units.find(u=>u.id===seg.fromUnitId)?.name.split(' - ')[1] || 'Origem'}</span>
+                                    <ArrowRight className="w-3 h-3 text-slate-400"/>
+                                    <span className="truncate max-w-[80px]">{state.units.find(u=>u.id===seg.toUnitId)?.name.split(' - ')[1] || 'Destino'}</span>
+                                 </div>
+                                 <p className="text-xs text-slate-500 mt-1">{seg.durationMinutes} min / {seg.distanceKm} km</p>
+                             </Card>
+                         ))}
+                     </div>
+                 )}
+
+                 {/* List of Saved Routes */}
+                 <div>
+                     <h4 className="font-bold text-slate-500 uppercase tracking-wider mb-4 text-sm">Rotas Salvas</h4>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                         {(state.routes || []).map(route => (
+                             <Card key={route.id} className="relative group hover:border-sle-blue transition-all duration-300 hover:shadow-md">
+                                 <div className="flex justify-between items-start mb-3">
+                                     <div className="flex items-center gap-3">
+                                         <div className="bg-slate-100 p-2 rounded-lg text-slate-500"><Map className="w-5 h-5"/></div>
+                                         <div>
+                                             <h4 className="font-bold text-lg text-sle-navy">{route.name}</h4>
+                                             <p className="text-xs text-slate-500 font-mono flex gap-2">
+                                                 <span className="flex items-center gap-1"><Clock className="w-3 h-3"/> {(route.totalDurationMinutes/60).toFixed(1)}h</span>
+                                                 <span className="flex items-center gap-1"><Navigation className="w-3 h-3"/> {route.totalDistanceKm}km</span>
+                                             </p>
+                                         </div>
+                                     </div>
+                                     <button onClick={() => setDeleteTarget({ type: 'route', id: route.id })} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity bg-red-50 p-2 rounded-lg"><Trash2 className="w-4 h-4"/></button>
+                                 </div>
+                                 
+                                 <div className="relative pt-2">
+                                     <div className="absolute top-1/2 left-0 w-full h-0.5 bg-slate-100 -z-10"></div>
+                                     <div className="flex justify-between items-center text-xs text-slate-600">
+                                         {route.unitSequence.map((uid, i) => {
+                                             // Show only first, last, and maybe middle if too long
+                                             if (route.unitSequence.length > 4 && i > 0 && i < route.unitSequence.length - 1) {
+                                                 if (i === 1) return <span key={i} className="bg-white px-2 text-slate-300">...</span>;
+                                                 return null;
+                                             }
+                                             return (
+                                                 <div key={i} className="bg-white px-2 flex flex-col items-center gap-1">
+                                                     <div className={`w-2 h-2 rounded-full ${i===0 ? 'bg-green-500': i===route.unitSequence.length-1 ? 'bg-red-500' : 'bg-slate-300'}`}></div>
+                                                     <span className="max-w-[60px] truncate text-[10px] text-slate-400">{state.units.find(u => u.id === uid)?.name.split(' - ')[1] || 'Unit'}</span>
+                                                 </div>
+                                             );
+                                         })}
+                                     </div>
+                                 </div>
+                             </Card>
+                         ))}
+                     </div>
                  </div>
              </div>
          )}
