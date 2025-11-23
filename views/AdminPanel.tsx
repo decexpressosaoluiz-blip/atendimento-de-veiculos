@@ -7,6 +7,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieCha
 import { Check, X, Download, Plus, Truck, Users, Key, Edit, Save, Trash2, Link, Map, ArrowRight, MapPin, Upload, Copy, HelpCircle, FileJson, Zap, Lightbulb, TrendingUp, AlertTriangle, Lock, Calendar, Filter, CheckCircle2, Search, Route as RouteIcon, Clock, Navigation } from 'lucide-react';
 import { GLOBAL_APPS_SCRIPT_URL } from '../constants';
 import { findLocationWithAI, calculateRouteLogistics } from '../services/geminiService';
+import { Sparkles } from 'lucide-react';
 
 interface AdminPanelProps {
   state: AppState;
@@ -1102,6 +1103,4 @@ const AdminPanelInternal: React.FC<AdminPanelProps & { updateGlobalState: (s: Ap
 };
 
 // Also import Sparkles for the AI flair in routes
-import { Sparkles } from 'lucide-react';
-
 export const AdminPanel = AdminPanelWithLogic;
