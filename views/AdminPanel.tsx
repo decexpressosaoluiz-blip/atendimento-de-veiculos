@@ -1,7 +1,5 @@
-
-
 import React, { useState, useEffect } from 'react';
-import { AppState, JustificationStatus, Employee, Vehicle, VehicleStatus, UserAccount, Unit, RouteTemplate, TripStop } from '../types';
+import { AppState, JustificationStatus, Employee, Vehicle, VehicleStatus, UserAccount, Unit, RouteTemplate, TripStop, RouteSegment } from '../types';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
@@ -91,7 +89,7 @@ const AdminPanelInternal: React.FC<AdminPanelProps & { updateGlobalState: (s: Ap
       selectedUnits: [] as string[], // Sequence of Unit IDs
       segmentWaypoints: {} as Record<string, string>, // key: "fromId-toId", value: "City Name/Road Name"
       isCalculating: false,
-      calculatedSegments: [] as any[],
+      calculatedSegments: [] as RouteSegment[],
       totalTime: 0,
       totalDist: 0
   });
@@ -330,7 +328,7 @@ const AdminPanelInternal: React.FC<AdminPanelProps & { updateGlobalState: (s: Ap
       if (routeForm.selectedUnits.length < 2) return;
       setRouteForm(prev => ({ ...prev, isCalculating: true }));
 
-      const segments = [];
+      const segments: RouteSegment[] = [];
       let totalTime = 0;
       let totalDist = 0;
 
