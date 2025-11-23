@@ -343,8 +343,8 @@ const App: React.FC = () => {
            try {
                const json = JSON.parse(text);
                if (json.result === 'success') {
-                   if (json.version === '6.0') {
-                       alert("✅ Sucesso Total! Conectado ao Script v6.0.");
+                   if (json.version === '10.1') {
+                       alert("✅ Sucesso Total! Conectado ao Script v10.1.");
                    } else {
                        alert("⚠️ Sucesso parcial. Script conectado, mas rodando versão antiga: " + (json.version || 'Desconhecida') + ". ATENÇÃO: Crie uma Nova Versão no Apps Script.");
                    }
