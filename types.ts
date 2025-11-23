@@ -73,7 +73,7 @@ export interface RouteSegment {
   toUnitId: string;
   durationMinutes: number;
   distanceKm: number;
-  waypoints?: string; // Custom text for "Via/Passing through"
+  waypoints?: string; // Custom text for "Via/Passing through" to force specific path
 }
 
 export interface RouteTemplate {

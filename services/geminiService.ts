@@ -58,13 +58,13 @@ export const calculateRouteLogistics = async (
     try {
         let routeDesc = `${originName} to ${destinationName}`;
         if (via && via.trim().length > 0) {
-            routeDesc += ` passing through/via ${via}`;
+            routeDesc += ` passing through/via specific waypoints: ${via}`;
         }
 
         const prompt = `
             Act as a logistics engine. Estimate the driving distance (km) and driving time (minutes) for a HEAVY TRUCK (Vehicle) for this route: ${routeDesc}.
             Consider real-world traffic conditions for a standard weekday.
-            If "via" points are specified, you MUST calculate the route passing through them, even if it's not the shortest path.
+            IMPORTANT: If "via" points are specified, you MUST calculate the route passing through them, even if it's not the shortest path.
             Return ONLY JSON.
         `;
 
