@@ -1,5 +1,5 @@
 {
-  "name": "Atendimento de Veículos",
+  "name": "Painel de Veículos",
   "description": "Sistema de controle de eficiência de atendimento de veículos e logística.",
   "requestFramePermissions": [
     "camera"
