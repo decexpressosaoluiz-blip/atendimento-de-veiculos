@@ -5,7 +5,7 @@ import { Unit, Employee, Vehicle, VehicleStatus, AppState, UserAccount } from '.
 export const GLOBAL_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxl2QDw6Jhl15mc8PoAa5FJqNNDUhw44PF0tEUiI55e5eky4VYgPpfGaML0bW7gAMI4VQ/exec"; 
 
 export const INITIAL_UNITS: Unit[] = [
-  { id: 'u1', name: 'DEC - MATRIZ', location: 'Matriz Administrativa', alarmIntervalMinutes: 60 },
+  { id: 'u1', name: 'DEC - MATRIZ', location: 'Goiânia, GO', alarmIntervalMinutes: 60 }, // Updated to real location
   { id: 'u2', name: 'DEC - ARAGUAIA SHOPPING', location: 'Goiânia, GO', alarmIntervalMinutes: 60 },
   { id: 'u3', name: 'DEC - SANTA RITA', location: 'Santa Rita, GO', alarmIntervalMinutes: 60 },
   { id: 'u4', name: 'DEC - CUIABÁ', location: 'Cuiabá, MT', alarmIntervalMinutes: 60 },

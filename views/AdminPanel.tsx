@@ -1,10 +1,11 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { AppState, JustificationStatus, Employee, Vehicle, VehicleStatus, UserAccount, Unit, RouteTemplate, TripStop } from '../types';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
-import { Check, X, Download, Plus, Truck, Users, Key, Edit, Save, Trash2, Link, Map, ArrowRight, MapPin, Upload, Copy, HelpCircle, FileJson, Zap, Lightbulb, TrendingUp, AlertTriangle, Lock, Calendar, Filter, CheckCircle2, Search, Route as RouteIcon, Clock, Navigation } from 'lucide-react';
+import { Check, X, Download, Plus, Truck, Users, Key, Edit, Save, Trash2, Link, Map, ArrowRight, MapPin, Upload, Copy, HelpCircle, FileJson, Zap, Lightbulb, TrendingUp, AlertTriangle, Lock, Calendar, Filter, CheckCircle2, Search, Route as RouteIcon, Clock, Navigation, MapPinned } from 'lucide-react';
 import { GLOBAL_APPS_SCRIPT_URL } from '../constants';
 import { findLocationWithAI, calculateRouteLogistics } from '../services/geminiService';
 import { Sparkles } from 'lucide-react';
@@ -80,6 +81,7 @@ const AdminPanelInternal: React.FC<AdminPanelProps & { updateGlobalState: (s: Ap
   const [deleteError, setDeleteError] = useState('');
 
   // --- UNIT FORM STATE ---
+  const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
   const [unitForm, setUnitForm] = useState({ name: '', location: '', addressSearch: '', lat: 0, lng: 0, foundAddress: '' });
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
 
@@ -87,6 +89,7 @@ const AdminPanelInternal: React.FC<AdminPanelProps & { updateGlobalState: (s: Ap
   const [routeForm, setRouteForm] = useState({ 
       name: '', 
       selectedUnits: [] as string[], // Sequence of Unit IDs
+      segmentWaypoints: {} as Record<string, string>, // key: "fromId-toId", value: "City Name/Road Name"
       isCalculating: false,
       calculatedSegments: [] as any[],
       totalTime: 0,
@@ -270,21 +273,56 @@ const AdminPanelInternal: React.FC<AdminPanelProps & { updateGlobalState: (s: Ap
       }
   };
 
-  const handleAddUnit = () => {
-      const newUnit: Unit = {
-          id: `u-${Date.now()}`,
-          name: unitForm.name,
-          location: unitForm.location,
-          alarmIntervalMinutes: 60,
-          geo: unitForm.foundAddress ? {
-              address: unitForm.foundAddress,
-              lat: unitForm.lat,
-              lng: unitForm.lng
-          } : undefined
-      };
-      updateGlobalState({ ...state, units: [...state.units, newUnit] });
+  const handleSaveUnit = () => {
+      if (editingUnitId) {
+          const updatedUnits = state.units.map(u => {
+              if (u.id === editingUnitId) {
+                  return {
+                      ...u,
+                      name: unitForm.name,
+                      location: unitForm.location,
+                      geo: unitForm.foundAddress ? {
+                          address: unitForm.foundAddress,
+                          lat: unitForm.lat,
+                          lng: unitForm.lng
+                      } : u.geo
+                  };
+              }
+              return u;
+          });
+          updateGlobalState({ ...state, units: updatedUnits });
+          showToast("Unidade atualizada!");
+      } else {
+          const newUnit: Unit = {
+              id: `u-${Date.now()}`,
+              name: unitForm.name,
+              location: unitForm.location,
+              alarmIntervalMinutes: 60,
+              geo: unitForm.foundAddress ? {
+                  address: unitForm.foundAddress,
+                  lat: unitForm.lat,
+                  lng: unitForm.lng
+              } : undefined
+          };
+          updateGlobalState({ ...state, units: [...state.units, newUnit] });
+          showToast("Unidade cadastrada com sucesso!");
+      }
+      // Reset
       setUnitForm({ name: '', location: '', addressSearch: '', lat: 0, lng: 0, foundAddress: '' });
-      showToast("Unidade cadastrada com sucesso!");
+      setEditingUnitId(null);
+  };
+
+  const handleEditUnitClick = (u: Unit) => {
+      setEditingUnitId(u.id);
+      setUnitForm({
+          name: u.name,
+          location: u.location,
+          addressSearch: u.geo?.address || u.location,
+          lat: u.geo?.lat || 0,
+          lng: u.geo?.lng || 0,
+          foundAddress: u.geo?.address || ''
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // --- ROUTE MANAGEMENT ---
@@ -292,7 +330,6 @@ const AdminPanelInternal: React.FC<AdminPanelProps & { updateGlobalState: (s: Ap
       if (routeForm.selectedUnits.length < 2) return;
       setRouteForm(prev => ({ ...prev, isCalculating: true }));
 
-      // Simulate segment calculation
       const segments = [];
       let totalTime = 0;
       let totalDist = 0;
@@ -302,18 +339,24 @@ const AdminPanelInternal: React.FC<AdminPanelProps & { updateGlobalState: (s: Ap
           const toId = routeForm.selectedUnits[i+1];
           const fromUnit = state.units.find(u => u.id === fromId);
           const toUnit = state.units.find(u => u.id === toId);
+          
+          // Check if there is a waypoint for this segment
+          const segmentKey = `${fromId}-${toId}`;
+          const via = routeForm.segmentWaypoints[segmentKey] || "";
 
           if (fromUnit && toUnit) {
               const fromName = fromUnit.geo?.address || fromUnit.location + ", Brazil";
               const toName = toUnit.geo?.address || toUnit.location + ", Brazil";
               
-              const result = await calculateRouteLogistics(fromName, toName);
+              // Pass 'via' to calculation service
+              const result = await calculateRouteLogistics(fromName, toName, via);
               
               segments.push({
                   fromUnitId: fromId,
                   toUnitId: toId,
                   durationMinutes: result.durationMinutes,
-                  distanceKm: result.distanceKm
+                  distanceKm: result.distanceKm,
+                  waypoints: via // Save the waypoint used
               });
               totalTime += result.durationMinutes;
               totalDist += result.distanceKm;
@@ -339,8 +382,24 @@ const AdminPanelInternal: React.FC<AdminPanelProps & { updateGlobalState: (s: Ap
           totalDurationMinutes: routeForm.totalTime
       };
       updateGlobalState({ ...state, routes: [...(state.routes || []), newRoute] });
-      setRouteForm({ name: '', selectedUnits: [], isCalculating: false, calculatedSegments: [], totalTime: 0, totalDist: 0 });
+      setRouteForm({ name: '', selectedUnits: [], segmentWaypoints: {}, isCalculating: false, calculatedSegments: [], totalTime: 0, totalDist: 0 });
       showToast("Rota salva com sucesso!");
+  };
+
+  const handleWaypointChange = (index: number, value: string) => {
+      // Waypoint is between index and index-1
+      if (index === 0) return;
+      const fromId = routeForm.selectedUnits[index-1];
+      const toId = routeForm.selectedUnits[index];
+      const key = `${fromId}-${toId}`;
+      
+      setRouteForm(prev => ({
+          ...prev,
+          segmentWaypoints: {
+              ...prev.segmentWaypoints,
+              [key]: value
+          }
+      }));
   };
 
   // --- TRIP FORM (Modified) ---
@@ -575,7 +634,7 @@ const AdminPanelInternal: React.FC<AdminPanelProps & { updateGlobalState: (s: Ap
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                      <div className="md:col-span-1">
                          <Card>
-                             <h3 className="font-bold text-lg mb-4 text-sle-navy">Nova Unidade</h3>
+                             <h3 className="font-bold text-lg mb-4 text-sle-navy">{editingUnitId ? 'Editar Unidade' : 'Nova Unidade'}</h3>
                              <div className="space-y-4">
                                  <div>
                                      <label className={labelClassName}>Nome (Identificação)</label>
@@ -602,8 +661,11 @@ const AdminPanelInternal: React.FC<AdminPanelProps & { updateGlobalState: (s: Ap
                                          <p className="text-slate-400 mt-1 font-mono">Lat: {unitForm.lat.toFixed(4)}, Lng: {unitForm.lng.toFixed(4)}</p>
                                      </div>
                                  )}
-
-                                 <Button onClick={handleAddUnit} disabled={!unitForm.name || !unitForm.foundAddress} className="w-full" icon={<Plus className="w-4 h-4"/>}>Cadastrar Unidade</Button>
+                                 
+                                 <div className="flex gap-2">
+                                     {editingUnitId && <Button variant="secondary" onClick={() => { setEditingUnitId(null); setUnitForm({ name: '', location: '', addressSearch: '', lat: 0, lng: 0, foundAddress: '' }); }}>Cancelar</Button>}
+                                     <Button onClick={handleSaveUnit} disabled={!unitForm.name || !unitForm.foundAddress} className="w-full" icon={editingUnitId ? <Save className="w-4 h-4"/> : <Plus className="w-4 h-4"/>}>{editingUnitId ? 'Atualizar' : 'Cadastrar'}</Button>
+                                 </div>
                              </div>
                          </Card>
                      </div>
@@ -627,8 +689,9 @@ const AdminPanelInternal: React.FC<AdminPanelProps & { updateGlobalState: (s: Ap
                                                      {u.geo && <span className="text-[10px] text-blue-500 font-mono flex items-center gap-1"><MapPin className="w-3 h-3"/> Validado</span>}
                                                  </div>
                                              </td>
-                                             <td className="p-4 text-right">
-                                                 <button onClick={() => setDeleteTarget({ type: 'unit', id: u.id })} className="text-red-400 hover:text-red-600 p-2"><Trash2 className="w-4 h-4"/></button>
+                                             <td className="p-4 text-right flex justify-end gap-1">
+                                                 <button onClick={() => handleEditUnitClick(u)} className="text-blue-400 hover:text-blue-600 p-2" title="Editar"><Edit className="w-4 h-4"/></button>
+                                                 <button onClick={() => setDeleteTarget({ type: 'unit', id: u.id })} className="text-red-400 hover:text-red-600 p-2" title="Excluir"><Trash2 className="w-4 h-4"/></button>
                                              </td>
                                          </tr>
                                      ))}
@@ -645,7 +708,7 @@ const AdminPanelInternal: React.FC<AdminPanelProps & { updateGlobalState: (s: Ap
              <div className="space-y-6 animate-in fade-in">
                  <Card>
                      <h3 className="font-bold text-lg mb-4 text-sle-navy flex items-center gap-2"><RouteIcon className="w-5 h-5"/> Criador de Rotas Inteligente</h3>
-                     <p className="text-sm text-slate-500 mb-6">Selecione as unidades na ordem de passagem. A Inteligência Artificial calculará tempos e distâncias automaticamente.</p>
+                     <p className="text-sm text-slate-500 mb-6">Selecione as unidades na ordem de passagem. Caso o veículo precise passar por cidades ou rodovias específicas fora das unidades, preencha o campo "Via / Ponto de Referência".</p>
                      
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                          <div className="space-y-4">
@@ -655,7 +718,7 @@ const AdminPanelInternal: React.FC<AdminPanelProps & { updateGlobalState: (s: Ap
                              </div>
                              
                              <div>
-                                 <label className={labelClassName}>Sequência de Paradas</label>
+                                 <label className={labelClassName}>Adicionar Unidade ao Trajeto</label>
                                  <div className="flex flex-wrap gap-2 mb-2">
                                      {state.units.map(u => (
                                          <button 
@@ -673,16 +736,40 @@ const AdminPanelInternal: React.FC<AdminPanelProps & { updateGlobalState: (s: Ap
                                          <p className="text-center text-slate-400 text-xs mt-4">Nenhuma unidade selecionada.</p>
                                      ) : (
                                          <div className="flex flex-col gap-2">
-                                             {routeForm.selectedUnits.map((uid, idx) => (
-                                                 <div key={idx} className="flex items-center gap-3 animate-in slide-in-from-left-2">
-                                                     <div className="bg-sle-blue text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shadow-sm">{idx + 1}</div>
-                                                     <div className="flex-1 bg-white border border-slate-200 p-2 rounded-lg text-sm font-medium flex justify-between">
-                                                         {state.units.find(u => u.id === uid)?.name}
-                                                         <button onClick={() => setRouteForm(prev => ({...prev, selectedUnits: prev.selectedUnits.filter((_, i) => i !== idx)}))} className="text-red-400 hover:text-red-600"><X className="w-3 h-3"/></button>
-                                                     </div>
-                                                     {idx < routeForm.selectedUnits.length - 1 && <div className="h-4 w-px bg-slate-300 absolute left-3 top-8"></div>}
-                                                 </div>
-                                             ))}
+                                             {routeForm.selectedUnits.map((uid, idx) => {
+                                                 // Logic for Waypoints (Between nodes)
+                                                 const isFirst = idx === 0;
+                                                 const prevUid = !isFirst ? routeForm.selectedUnits[idx-1] : null;
+                                                 const waypointKey = prevUid ? `${prevUid}-${uid}` : null;
+
+                                                 return (
+                                                     <React.Fragment key={idx}>
+                                                         {!isFirst && waypointKey && (
+                                                             <div className="flex items-center justify-center py-1">
+                                                                 <div className="bg-slate-200 w-0.5 h-4"></div>
+                                                                 <div className="relative w-full px-8">
+                                                                     <input 
+                                                                        type="text"
+                                                                        placeholder="Via / Ponto de Referência (Opcional)"
+                                                                        className="w-full text-xs bg-yellow-50 border border-yellow-200 rounded px-2 py-1 text-center text-slate-600 placeholder:text-slate-300 focus:ring-1 focus:ring-yellow-400 outline-none"
+                                                                        value={routeForm.segmentWaypoints[waypointKey] || ''}
+                                                                        onChange={(e) => handleWaypointChange(idx, e.target.value)}
+                                                                     />
+                                                                     <MapPinned className="w-3 h-3 text-yellow-500 absolute left-10 top-1.5" />
+                                                                 </div>
+                                                             </div>
+                                                         )}
+
+                                                         <div className="flex items-center gap-3 animate-in slide-in-from-left-2">
+                                                             <div className="bg-sle-blue text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shadow-sm">{idx + 1}</div>
+                                                             <div className="flex-1 bg-white border border-slate-200 p-2 rounded-lg text-sm font-medium flex justify-between">
+                                                                 {state.units.find(u => u.id === uid)?.name}
+                                                                 <button onClick={() => setRouteForm(prev => ({...prev, selectedUnits: prev.selectedUnits.filter((_, i) => i !== idx)}))} className="text-red-400 hover:text-red-600"><X className="w-3 h-3"/></button>
+                                                             </div>
+                                                         </div>
+                                                     </React.Fragment>
+                                                 );
+                                             })}
                                          </div>
                                      )}
                                  </div>
@@ -708,9 +795,16 @@ const AdminPanelInternal: React.FC<AdminPanelProps & { updateGlobalState: (s: Ap
                                      <div className="space-y-2 mt-4">
                                          <p className="text-xs font-bold uppercase text-slate-400">Segmentos:</p>
                                          {routeForm.calculatedSegments.map((seg, i) => (
-                                             <div key={i} className="text-xs flex justify-between items-center bg-white p-2 rounded border border-slate-100">
-                                                 <span>{state.units.find(u=>u.id===seg.fromUnitId)?.name} → {state.units.find(u=>u.id===seg.toUnitId)?.name}</span>
-                                                 <span className="font-mono font-bold text-slate-600">{seg.durationMinutes} min / {seg.distanceKm} km</span>
+                                             <div key={i} className="text-xs flex flex-col bg-white p-2 rounded border border-slate-100 gap-1">
+                                                 <div className="flex justify-between items-center">
+                                                     <span>{state.units.find(u=>u.id===seg.fromUnitId)?.name} → {state.units.find(u=>u.id===seg.toUnitId)?.name}</span>
+                                                     <span className="font-mono font-bold text-slate-600">{seg.durationMinutes} min / {seg.distanceKm} km</span>
+                                                 </div>
+                                                 {seg.waypoints && (
+                                                     <div className="text-[10px] text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded w-fit flex items-center gap-1">
+                                                         <MapPinned className="w-3 h-3" /> Via: {seg.waypoints}
+                                                     </div>
+                                                 )}
                                              </div>
                                          ))}
                                      </div>
@@ -719,7 +813,7 @@ const AdminPanelInternal: React.FC<AdminPanelProps & { updateGlobalState: (s: Ap
                              ) : (
                                  <div className="flex flex-col items-center justify-center h-full text-slate-400">
                                      <Navigation className="w-12 h-12 mb-2 opacity-20"/>
-                                     <p className="text-sm">Configure a sequência e clique em Calcular.</p>
+                                     <p className="text-sm text-center">Configure a sequência e clique em Calcular.<br/><span className="text-xs opacity-70">Use "Via" para forçar caminhos específicos.</span></p>
                                  </div>
                              )}
                          </div>
@@ -738,12 +832,18 @@ const AdminPanelInternal: React.FC<AdminPanelProps & { updateGlobalState: (s: Ap
                                  <button onClick={() => setDeleteTarget({ type: 'route', id: route.id })} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity"><Trash2 className="w-4 h-4"/></button>
                              </div>
                              <div className="flex items-center gap-1 text-xs text-slate-600 flex-wrap">
-                                 {route.unitSequence.map((uid, i) => (
-                                     <React.Fragment key={i}>
-                                         <span className="bg-slate-100 px-2 py-1 rounded">{state.units.find(u => u.id === uid)?.name}</span>
-                                         {i < route.unitSequence.length - 1 && <ArrowRight className="w-3 h-3 text-slate-300"/>}
-                                     </React.Fragment>
-                                 ))}
+                                 {route.unitSequence.map((uid, i) => {
+                                     const segment = i > 0 ? route.segments.find(s => s.fromUnitId === route.unitSequence[i-1] && s.toUnitId === uid) : null;
+                                     return (
+                                         <React.Fragment key={i}>
+                                             {i > 0 && <div className="flex flex-col items-center px-1">
+                                                 <ArrowRight className="w-3 h-3 text-slate-300"/>
+                                                 {segment?.waypoints && <span className="text-[9px] text-yellow-600 bg-yellow-50 px-1 rounded border border-yellow-100 max-w-[60px] truncate" title={`Via: ${segment.waypoints}`}>via...</span>}
+                                             </div>}
+                                             <span className="bg-slate-100 px-2 py-1 rounded">{state.units.find(u => u.id === uid)?.name}</span>
+                                         </React.Fragment>
+                                     );
+                                 })}
                              </div>
                          </Card>
                      ))}

@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Vehicle } from "../types";
 
@@ -34,9 +35,6 @@ export const findLocationWithAI = async (query: string): Promise<{ address: stri
       }
     });
     
-    // Fallback: If tool grounding returns chunks but not JSON in text, we might need to parse groundingMetadata
-    // But forcing responseMimeType usually works well with 2.5-flash
-    
     if (response.text) {
         return JSON.parse(response.text);
     }
@@ -52,19 +50,21 @@ export const findLocationWithAI = async (query: string): Promise<{ address: stri
 export const calculateRouteLogistics = async (
     originName: string, 
     destinationName: string, 
-    intermediates: string[] = []
+    via: string = ""
 ): Promise<{ durationMinutes: number; distanceKm: number }> => {
     const ai = getAI();
     if (!ai) return { durationMinutes: 60, distanceKm: 50 }; // Default fallback
 
     try {
-        const routeDesc = intermediates.length > 0 
-            ? `${originName} to ${destinationName} via ${intermediates.join(', ')}`
-            : `${originName} to ${destinationName}`;
+        let routeDesc = `${originName} to ${destinationName}`;
+        if (via && via.trim().length > 0) {
+            routeDesc += ` passing through/via ${via}`;
+        }
 
         const prompt = `
-            Act as a logistics engine. Estimate the driving distance (km) and driving time (minutes) for a heavy truck for this route: ${routeDesc}.
+            Act as a logistics engine. Estimate the driving distance (km) and driving time (minutes) for a HEAVY TRUCK (Vehicle) for this route: ${routeDesc}.
             Consider real-world traffic conditions for a standard weekday.
+            If "via" points are specified, you MUST calculate the route passing through them, even if it's not the shortest path.
             Return ONLY JSON.
         `;
 
@@ -76,7 +76,7 @@ export const calculateRouteLogistics = async (
                 responseSchema: {
                     type: Type.OBJECT,
                     properties: {
-                        durationMinutes: { type: Type.INTEGER, description: "Estimated driving time in minutes" },
+                        durationMinutes: { type: Type.INTEGER, description: "Estimated driving time in minutes for a truck" },
                         distanceKm: { type: Type.NUMBER, description: "Estimated distance in KM" }
                     }
                 }

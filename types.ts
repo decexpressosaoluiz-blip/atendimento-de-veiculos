@@ -1,4 +1,5 @@
 
+
 export enum VehicleStatus {
   PENDING = 'PENDING',
   COMPLETED = 'COMPLETED',
@@ -72,6 +73,7 @@ export interface RouteSegment {
   toUnitId: string;
   durationMinutes: number;
   distanceKm: number;
+  waypoints?: string; // Custom text for "Via/Passing through"
 }
 
 export interface RouteTemplate {
