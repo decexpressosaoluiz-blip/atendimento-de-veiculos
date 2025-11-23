@@ -124,5 +124,6 @@ export const INITIAL_STATE: AppState = {
   vehicles: INITIAL_VEHICLES,
   justifications: [],
   alarms: [],
+  routes: [],
   googleSheetsUrl: GLOBAL_APPS_SCRIPT_URL || ''
 };

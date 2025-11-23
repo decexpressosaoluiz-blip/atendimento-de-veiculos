@@ -13,10 +13,18 @@ export enum JustificationStatus {
   REJECTED = 'REJECTED', // Improcedente
 }
 
+export interface GeoLocation {
+  address: string;
+  lat?: number;
+  lng?: number;
+  placeId?: string;
+}
+
 export interface Unit {
   id: string;
   name: string;
-  location: string;
+  location: string; // Nome visual curto
+  geo?: GeoLocation; // Dados reais do Maps
   alarmIntervalMinutes: number;
 }
 
@@ -54,8 +62,25 @@ export interface Vehicle {
   id: string;
   number: string;
   route: string; // Nome da Viagem/Itinerário
+  routeId?: string; // Link para o template de rota (opcional)
   stops: TripStop[]; // Array of stops (Origin -> [Intermediate] -> Destination)
   status?: VehicleStatus; // Status geral da viagem (ex: CANCELLED)
+}
+
+export interface RouteSegment {
+  fromUnitId: string;
+  toUnitId: string;
+  durationMinutes: number;
+  distanceKm: number;
+}
+
+export interface RouteTemplate {
+  id: string;
+  name: string;
+  unitSequence: string[]; // Ordered list of Unit IDs
+  segments: RouteSegment[]; // Pre-calculated segments by AI
+  totalDurationMinutes: number;
+  totalDistanceKm: number;
 }
 
 export interface Justification {
@@ -87,5 +112,6 @@ export interface AppState {
   vehicles: Vehicle[];
   justifications: Justification[];
   alarms: AlarmLog[];
+  routes: RouteTemplate[]; // Nova lista de templates de rotas
   googleSheetsUrl?: string;
 }

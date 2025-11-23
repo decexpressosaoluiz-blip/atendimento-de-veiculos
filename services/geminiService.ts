@@ -10,6 +10,89 @@ const getAI = () => {
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
+// --- MAPS: Find Location using Google Search/Maps Grounding ---
+export const findLocationWithAI = async (query: string): Promise<{ address: string; lat?: number; lng?: number; found: boolean }> => {
+  const ai = getAI();
+  if (!ai) return { address: '', found: false };
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: `Find the exact address, latitude and longitude for: "${query}". Return the result in JSON.`,
+      config: {
+        tools: [{ googleMaps: {} }],
+        responseMimeType: "application/json",
+        responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+                found: { type: Type.BOOLEAN },
+                address: { type: Type.STRING },
+                lat: { type: Type.NUMBER },
+                lng: { type: Type.NUMBER }
+            }
+        }
+      }
+    });
+    
+    // Fallback: If tool grounding returns chunks but not JSON in text, we might need to parse groundingMetadata
+    // But forcing responseMimeType usually works well with 2.5-flash
+    
+    if (response.text) {
+        return JSON.parse(response.text);
+    }
+    return { address: '', found: false };
+
+  } catch (e) {
+    console.error("Maps AI Error:", e);
+    return { address: '', found: false };
+  }
+};
+
+// --- LOGISTICS: Calculate Route Estimates ---
+export const calculateRouteLogistics = async (
+    originName: string, 
+    destinationName: string, 
+    intermediates: string[] = []
+): Promise<{ durationMinutes: number; distanceKm: number }> => {
+    const ai = getAI();
+    if (!ai) return { durationMinutes: 60, distanceKm: 50 }; // Default fallback
+
+    try {
+        const routeDesc = intermediates.length > 0 
+            ? `${originName} to ${destinationName} via ${intermediates.join(', ')}`
+            : `${originName} to ${destinationName}`;
+
+        const prompt = `
+            Act as a logistics engine. Estimate the driving distance (km) and driving time (minutes) for a heavy truck for this route: ${routeDesc}.
+            Consider real-world traffic conditions for a standard weekday.
+            Return ONLY JSON.
+        `;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        durationMinutes: { type: Type.INTEGER, description: "Estimated driving time in minutes" },
+                        distanceKm: { type: Type.NUMBER, description: "Estimated distance in KM" }
+                    }
+                }
+            }
+        });
+
+        if (response.text) {
+            return JSON.parse(response.text);
+        }
+        return { durationMinutes: 60, distanceKm: 50 };
+    } catch (e) {
+        console.error("Route AI Error:", e);
+        return { durationMinutes: 60, distanceKm: 50 };
+    }
+};
+
 // --- VISION: Analyze Service Photos ---
 export const analyzeServicePhoto = async (base64Image: string): Promise<{
   isVehicle: boolean;

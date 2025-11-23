@@ -45,6 +45,7 @@ export const loadState = (): AppState => {
       if (data.employees) state.employees = data.employees;
       if (data.vehicles) state.vehicles = data.vehicles;
       if (data.justifications) state.justifications = data.justifications;
+      if (data.routes) state.routes = data.routes; // Load Routes
       
       // Load stored URL from data only if GLOBAL is not set
       if (data.googleSheetsUrl && !GLOBAL_APPS_SCRIPT_URL) {
