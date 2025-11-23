@@ -835,19 +835,33 @@ function doPost(e) {
                              </div>
                          </div>
 
-                         {/* DESTINATION */}
-                         <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                             <span className="text-xs font-bold text-red-600 mb-2 block">DESTINO FINAL</span>
-                             <div className="space-y-2">
-                                 <select className={inputClassName} value={tripForm.destId} onChange={e=>setTripForm({...tripForm, destId: e.target.value})}>
-                                     {state.units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                                 </select>
-                                 <div className="flex gap-2">
-                                     <input type="date" required className={inputClassName} value={tripForm.destDate} onChange={e=>setTripForm({...tripForm, destDate: e.target.value})} />
-                                     <input type="time" required className={inputClassName} value={tripForm.destTime} onChange={e=>setTripForm({...tripForm, destTime: e.target.value})} />
+                         {/* DESTINATION Toggle & Block */}
+                         <div className="md:col-span-2 mt-2">
+                             <label className="flex items-center gap-2 text-sm font-bold text-slate-600 cursor-pointer select-none">
+                                 <input 
+                                    type="checkbox" 
+                                    checked={tripForm.hasDestination} 
+                                    onChange={e=>setTripForm({...tripForm, hasDestination: e.target.checked})} 
+                                    className="w-4 h-4 text-sle-blue rounded focus:ring-sle-blue"
+                                 />
+                                 Definir Destino Final
+                             </label>
+                         </div>
+
+                         {tripForm.hasDestination && (
+                             <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 animate-in slide-in-from-top-2">
+                                 <span className="text-xs font-bold text-red-600 mb-2 block">DESTINO FINAL</span>
+                                 <div className="space-y-2">
+                                     <select className={inputClassName} value={tripForm.destId} onChange={e=>setTripForm({...tripForm, destId: e.target.value})}>
+                                         {state.units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                                     </select>
+                                     <div className="flex gap-2">
+                                         <input type="date" required className={inputClassName} value={tripForm.destDate} onChange={e=>setTripForm({...tripForm, destDate: e.target.value})} />
+                                         <input type="time" required className={inputClassName} value={tripForm.destTime} onChange={e=>setTripForm({...tripForm, destTime: e.target.value})} />
+                                     </div>
                                  </div>
                              </div>
-                         </div>
+                         )}
 
                          {/* INTERMEDIATE TOGGLE */}
                          <div className="md:col-span-2">
@@ -858,7 +872,7 @@ function doPost(e) {
                          </div>
 
                          {tripForm.hasIntermediate && (
-                             <div className="md:col-span-2 bg-blue-50 p-3 rounded-xl border border-blue-100">
+                             <div className="md:col-span-2 bg-blue-50 p-3 rounded-xl border border-blue-100 animate-in slide-in-from-top-2">
                                  <span className="text-xs font-bold text-blue-600 mb-2 block">PARADA INTERMEDIÁRIA</span>
                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                      <select className={inputClassName} value={tripForm.intId} onChange={e=>setTripForm({...tripForm, intId: e.target.value})}>
